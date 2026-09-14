@@ -11,3 +11,10 @@ updates:
     groups:
       development-tools:
         patterns: ['*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      inspector-tools:
+        patterns: ['*']

@@ -1,0 +1,14 @@
+{
+  "name": "retrace-inspector-dev",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format:ui": "prettier --write 'src/retrace/static/*.{html,css,js}' 'tests/browser/*.js' playwright.config.js",
+    "check:ui": "prettier --check 'src/retrace/static/*.{html,css,js}' 'tests/browser/*.js' playwright.config.js",
+    "test:ui": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "prettier": "3.9.6"
+  }
+}

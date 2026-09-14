@@ -1,0 +1,16 @@
+name: Feature proposal
+description: Describe a workflow limitation and proposed change.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What concrete problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed behavior and failure semantics
+      description: Consider retries, crashes, checkpoint compatibility, and alternatives.
+    validations:
+      required: true

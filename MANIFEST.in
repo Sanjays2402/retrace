@@ -1,0 +1,6 @@
+include LICENSE README.md CONTRIBUTING.md SECURITY.md CHANGELOG.md
+include package.json package-lock.json playwright.config.js
+recursive-include docs *.md *.json *.png
+recursive-include examples *.py
+recursive-include scripts *.py
+recursive-include tests *.py *.js

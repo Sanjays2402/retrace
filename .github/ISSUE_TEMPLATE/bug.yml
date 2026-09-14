@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible execution, recovery, or inspector problem.
+title: '[Bug]: '
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+      description: Include the failure boundary if this is a recovery issue.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal workflow and commands
+      description: Remove credentials and sensitive data.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version, operating system, and Retrace version
+    validations:
+      required: true
+  - type: textarea
+    id: journal
+    attributes:
+      label: Relevant sanitized events or error output
+      render: text

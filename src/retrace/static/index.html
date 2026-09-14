@@ -1,37 +1,180 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Retrace — Execution inspector</title>
-  <link rel="icon" href="/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
-</head>
-<body>
-  <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Retrace home"><img src="/mark.svg" alt="" width="36" height="36">retrace<span>α</span></a>
-    <div class="workspace"><span class="small-label">WORKSPACE</span><strong><span class="dot"></span> Local environment</strong><span>One database. Every checkpoint.</span></div>
-    <div class="nav-active"><span>◫</span> Execution inspector <span class="nav-count" id="run-count">0</span></div>
-    <div class="sidebar-foot"><span class="small-label">BUILT TO PICK UP AGAIN</span><p>The process can stop.<br>The progress stays.</p><span class="version">v0.1.0 <span>•</span> zero runtime dependencies</span></div>
-  </aside>
-  <main>
-    <header class="topbar"><span>Observability <span class="slash">/</span> <strong>Workflow runs</strong></span><span class="connection" id="connection" role="status"><span class="dot"></span> Live · polling every second</span></header>
-    <section class="page-heading"><div><div class="eyebrow">DURABLE EXECUTION, MADE VISIBLE</div><h1>Every step has a story.</h1><p>Follow the graph. Inspect the checkpoint. Know what happened.</p></div><button id="refresh" class="secondary">↻ &nbsp; Refresh</button></section>
-    <section class="stats" aria-label="Run statistics"><div><span>RECENT RUNS</span><strong id="stat-total">0</strong><small>Latest 100 executions</small></div><div><span>SUCCEEDED</span><strong id="stat-success">0</strong><small>All checkpoints committed</small></div><div><span>IN PROGRESS</span><strong id="stat-running">0</strong><small>Active worker lease</small></div><div><span>NEEDS ATTENTION</span><strong id="stat-attention">0</strong><small>Failed, paused, or interrupted</small></div></section>
-    <section class="execution-layout">
-      <aside class="runs-panel panel"><div class="panel-heading"><h2>Executions</h2><span class="muted">Recent</span></div><label class="search"><span>⌕</span><input id="search" aria-label="Search runs" placeholder="Find a workflow or run…"></label><div class="filters" role="group" aria-label="Filter executions"><button class="selected" data-filter="all">All</button><button data-filter="succeeded">Succeeded</button><button data-filter="attention">Attention</button></div><div id="run-list" class="run-list"></div></aside>
-      <div class="run-workspace panel">
-        <div id="empty" class="empty"><span class="empty-icon">↳</span><h2>Your next run starts here.</h2><p>Run <code>retrace demo</code> in another terminal.<br>Its graph and checkpoints will appear automatically.</p></div>
-        <div id="run-detail" hidden>
-          <div class="detail-heading"><div><div class="small-label" id="run-id"></div><h2 id="workflow-name"></h2></div><span id="run-status" class="badge"></span></div>
-          <div class="detail-meta"><span id="run-version"></span><span id="run-duration"></span><span id="run-epoch"></span><span class="readonly">◉ Read-only inspector</span></div>
-          <div class="view-tabs" role="tablist" aria-label="Execution view"><button role="tab" aria-selected="true" id="tab-graph" data-view="graph">Dependency graph</button><button role="tab" aria-selected="false" id="tab-timeline" data-view="timeline">Attempt timeline</button><span id="checkpoint-count"></span></div>
-          <div id="graph-view" role="tabpanel" aria-labelledby="tab-graph"><div class="graph-scroll"><div id="graph" class="graph"></div></div><div class="graph-legend"><span><i class="legend-dot succeeded"></i>Committed</span><span><i class="legend-dot running"></i>Running</span><span><i class="legend-dot retrying"></i>Retrying</span><span><i class="legend-dot pending"></i>Pending</span><span class="graph-tip">Select a step to inspect its output ↗</span></div></div>
-          <div id="timeline-view" role="tabpanel" aria-labelledby="tab-timeline" hidden></div>
-          <div class="bottom-grid"><section class="task-inspector"><div class="panel-heading"><h3 id="task-title">Checkpoint detail</h3><span id="task-badge" class="badge"></span></div><div id="task-meta" class="muted"></div><pre id="task-output">Select a step in the graph.</pre></section><section class="event-panel"><div class="panel-heading"><h3>Event journal</h3><span class="muted" id="event-count">0 events</span></div><div id="event-list"></div></section></div>
-        </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Retrace — Execution inspector</title>
+    <link rel="icon" href="/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Retrace home"
+        ><img src="/mark.svg" alt="" width="36" height="36" />retrace<span
+          >α</span
+        ></a
+      >
+      <div class="workspace">
+        <span class="small-label">WORKSPACE</span
+        ><strong><span class="dot"></span> Local environment</strong
+        ><span>One database. Every checkpoint.</span>
       </div>
-    </section>
-    <footer>RETRACE <span>Local-first orchestration. Inspectable by design.</span><a href="https://github.com/Sanjays2402/retrace" target="_blank" rel="noreferrer">Source & documentation ↗</a></footer>
-  </main>
-</body>
+      <div class="nav-active">
+        <span>◫</span> Execution inspector
+        <span class="nav-count" id="run-count">0</span>
+      </div>
+      <div class="sidebar-foot">
+        <span class="small-label">BUILT TO PICK UP AGAIN</span>
+        <p>The process can stop.<br />The progress stays.</p>
+        <span class="version"
+          >v0.1.0 <span>•</span> zero runtime dependencies</span
+        >
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <span
+          >Observability <span class="slash">/</span>
+          <strong>Workflow runs</strong></span
+        ><span class="connection" id="connection" role="status"
+          ><span class="dot"></span> Live · polling every second</span
+        >
+      </header>
+      <section class="page-heading">
+        <div>
+          <div class="eyebrow">DURABLE EXECUTION, MADE VISIBLE</div>
+          <h1>Every step has a story.</h1>
+          <p>Follow the graph. Inspect the checkpoint. Know what happened.</p>
+        </div>
+        <button id="refresh" class="secondary">↻ &nbsp; Refresh</button>
+      </section>
+      <section class="stats" aria-label="Run statistics">
+        <div>
+          <span>RECENT RUNS</span><strong id="stat-total">0</strong
+          ><small>Latest 100 executions</small>
+        </div>
+        <div>
+          <span>SUCCEEDED</span><strong id="stat-success">0</strong
+          ><small>All checkpoints committed</small>
+        </div>
+        <div>
+          <span>IN PROGRESS</span><strong id="stat-running">0</strong
+          ><small>Active worker lease</small>
+        </div>
+        <div>
+          <span>NEEDS ATTENTION</span><strong id="stat-attention">0</strong
+          ><small>Failed, paused, or interrupted</small>
+        </div>
+      </section>
+      <section class="execution-layout">
+        <aside class="runs-panel panel">
+          <div class="panel-heading">
+            <h2>Executions</h2>
+            <span class="muted">Recent</span>
+          </div>
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              id="search"
+              aria-label="Search runs"
+              placeholder="Find a workflow or run…"
+          /></label>
+          <div class="filters" role="group" aria-label="Filter executions">
+            <button class="selected" data-filter="all">All</button
+            ><button data-filter="succeeded">Succeeded</button
+            ><button data-filter="attention">Attention</button>
+          </div>
+          <div id="run-list" class="run-list"></div>
+        </aside>
+        <div class="run-workspace panel">
+          <div id="empty" class="empty">
+            <span class="empty-icon">↳</span>
+            <h2>Your next run starts here.</h2>
+            <p>
+              Run <code>retrace demo</code> in another terminal.<br />Its graph
+              and checkpoints will appear automatically.
+            </p>
+          </div>
+          <div id="run-detail" hidden>
+            <div class="detail-heading">
+              <div>
+                <div class="small-label" id="run-id"></div>
+                <h2 id="workflow-name"></h2>
+              </div>
+              <span id="run-status" class="badge"></span>
+            </div>
+            <div class="detail-meta">
+              <span id="run-version"></span><span id="run-duration"></span
+              ><span id="run-epoch"></span
+              ><span class="readonly">◉ Read-only inspector</span>
+            </div>
+            <div class="view-tabs" role="tablist" aria-label="Execution view">
+              <button
+                role="tab"
+                aria-selected="true"
+                id="tab-graph"
+                data-view="graph"
+              >
+                Dependency graph</button
+              ><button
+                role="tab"
+                aria-selected="false"
+                id="tab-timeline"
+                data-view="timeline"
+              >
+                Attempt timeline</button
+              ><span id="checkpoint-count"></span>
+            </div>
+            <div id="graph-view" role="tabpanel" aria-labelledby="tab-graph">
+              <div class="graph-scroll">
+                <div id="graph" class="graph"></div>
+              </div>
+              <div class="graph-legend">
+                <span><i class="legend-dot succeeded"></i>Committed</span
+                ><span><i class="legend-dot running"></i>Running</span
+                ><span><i class="legend-dot retrying"></i>Retrying</span
+                ><span><i class="legend-dot pending"></i>Pending</span
+                ><span class="graph-tip"
+                  >Select a step to inspect its output ↗</span
+                >
+              </div>
+            </div>
+            <div
+              id="timeline-view"
+              role="tabpanel"
+              aria-labelledby="tab-timeline"
+              hidden
+            ></div>
+            <div class="bottom-grid">
+              <section class="task-inspector">
+                <div class="panel-heading">
+                  <h3 id="task-title">Checkpoint detail</h3>
+                  <span id="task-badge" class="badge"></span>
+                </div>
+                <div id="task-meta" class="muted"></div>
+                <pre id="task-output">Select a step in the graph.</pre>
+              </section>
+              <section class="event-panel">
+                <div class="panel-heading">
+                  <h3>Event journal</h3>
+                  <span class="muted" id="event-count">0 events</span>
+                </div>
+                <div id="event-list"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+      <footer>
+        RETRACE <span>Local-first orchestration. Inspectable by design.</span
+        ><a
+          href="https://github.com/Sanjays2402/retrace"
+          target="_blank"
+          rel="noreferrer"
+          >Source & documentation ↗</a
+        >
+      </footer>
+    </main>
+  </body>
 </html>

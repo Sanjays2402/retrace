@@ -1,0 +1,18 @@
+{
+  "tasks": 100,
+  "repetitions": 5,
+  "seconds": [
+    0.06414116700034356,
+    0.05958345899853157,
+    0.058743207999214064,
+    0.05908970800373936,
+    0.06024745800095843
+  ],
+  "median_seconds": 0.05958345899853157,
+  "tasks_per_second": 1678.3181386375118,
+  "concurrency": 8,
+  "storage": "SQLite WAL + synchronous=FULL on temporary local disk",
+  "python": "3.12.14",
+  "os": "Darwin",
+  "machine": "arm64"
+}
