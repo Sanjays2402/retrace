@@ -10,9 +10,10 @@ import json
 import sqlite3
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,18 @@ class Lease:
     run_id: str
     owner: str
     epoch: int
+
+
+@dataclass(frozen=True)
+class RetryPlan:
+    """A point-in-time preview; execution always revalidates inside a write transaction."""
+
+    run_id: str
+    selected: tuple[str, ...]
+    reset: tuple[str, ...]
+    preserved: tuple[str, ...]
+    remaining_failed: tuple[str, ...]
+    remaining_blocked: tuple[str, ...]
 
 
 _SCHEMA = """
@@ -100,8 +113,8 @@ class Store:
         self.close()
 
     @contextmanager
-    def transaction(self) -> Iterator[None]:
-        self.db.execute("BEGIN IMMEDIATE")
+    def transaction(self, *, immediate: bool = True) -> Iterator[None]:
+        self.db.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
         try:
             yield
             self.db.execute("COMMIT")
@@ -185,6 +198,82 @@ class Store:
                 (run_id,),
             )
         ]
+
+    def _retry_plan(
+        self, workflow: Workflow, run_id: str, task_names: Sequence[str] | None
+    ) -> RetryPlan:
+        run = self.run(run_id)
+        if run["fingerprint"] != workflow.fingerprint:
+            raise DefinitionMismatch("workflow changed; retry requires the original definition")
+        if run["owner"] and run["lease_until"] > time.time():
+            raise RunBusy(f"run {run_id} has a live worker")
+        if run["status"] != "failed":
+            raise ValueError("only failed runs can be retried; use resume for interrupted runs")
+        states = self.tasks(run_id)
+        failed = {name for name, state in states.items() if state["status"] == "failed"}
+        selected = tuple(sorted(failed)) if task_names is None else tuple(task_names)
+        if isinstance(task_names, str) or not selected or len(set(selected)) != len(selected):
+            raise ValueError("select one or more unique failed task names")
+        if set(selected) - failed:
+            raise ValueError("retry selections must name currently failed tasks")
+        graph = {task.name: task.needs for task in workflow.tasks}
+        reset = set(selected)
+        for name in TopologicalSorter(graph).static_order():
+            # A fan-in remains blocked until *all* its dependencies can make progress.
+            if states[name]["status"] == "blocked" and all(
+                dep in reset or states[dep]["status"] == "succeeded" for dep in graph[name]
+            ):
+                reset.add(name)
+        return RetryPlan(
+            run_id=run_id,
+            selected=tuple(sorted(selected)),
+            reset=tuple(sorted(reset)),
+            preserved=tuple(sorted(n for n, s in states.items() if s["status"] == "succeeded")),
+            remaining_failed=tuple(sorted(failed - reset)),
+            remaining_blocked=tuple(
+                sorted(n for n, s in states.items() if s["status"] == "blocked" and n not in reset)
+            ),
+        )
+
+    def retry_plan(
+        self, workflow: Workflow, run_id: str, task_names: Sequence[str] | None = None
+    ) -> RetryPlan:
+        """Preview selective retry without changing the database; supports read-only stores."""
+        with self.transaction(immediate=False):
+            return self._retry_plan(workflow, run_id, task_names)
+
+    def retry_failed(
+        self, workflow: Workflow, run_id: str, task_names: Sequence[str] | None = None
+    ) -> RetryPlan:
+        """Atomically reopen a failed run, preserving checkpoints and historical attempts.
+
+        The per-task failure budget restarts for reset tasks. Attempt numbers and
+        idempotency keys do not restart. The caller must resume the pending run.
+        """
+        with self.transaction():
+            plan = self._retry_plan(workflow, run_id, task_names)
+            states = self.tasks(run_id)
+            for name in plan.reset:
+                self.db.execute(
+                    """UPDATE tasks SET status='pending',failures=0,error=NULL,output=NULL,
+                    next_at=0,started_at=NULL,finished_at=NULL WHERE run_id=? AND name=?""",
+                    (run_id, name),
+                )
+                self._event(
+                    run_id,
+                    "task.reset",
+                    name,
+                    reason="manual_retry",
+                    previous_status=states[name]["status"],
+                    previous_failures=states[name]["failures"],
+                )
+            self.db.execute(
+                """UPDATE runs SET status='pending',owner=NULL,lease_until=0,updated_at=?
+                WHERE id=?""",
+                (time.time(), run_id),
+            )
+            self._event(run_id, "run.retry_requested", selected=plan.selected, reset=plan.reset)
+            return plan
 
     def claim(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
         with self.transaction():

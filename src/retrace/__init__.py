@@ -1,7 +1,7 @@
 """Retrace: crash-resumable Python workflows, without a service cluster."""
 
 from retrace.engine import Engine, RunResult
-from retrace.store import DefinitionMismatch, LeaseLost, RunBusy, Store
+from retrace.store import DefinitionMismatch, LeaseLost, RetryPlan, RunBusy, Store
 from retrace.workflow import Context, RetryPolicy, Task, Workflow
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "Engine",
     "LeaseLost",
     "RetryPolicy",
+    "RetryPlan",
     "RunBusy",
     "RunResult",
     "Store",

@@ -78,3 +78,41 @@ class CLITests(unittest.TestCase):
         with patch("retrace.server.serve") as serve:
             self.assertEqual(self.invoke("serve", "--port", "7761")[0], 0)
             serve.assert_called_once_with(self.db, 7761)
+
+    def test_retry_preview_and_execution_preserve_completed_task(self):
+        ready_file = Path(self.directory.name, "service.ready")
+        code, out, _ = self.invoke(
+            "run",
+            "examples.recoverable:workflow",
+            "--input",
+            json.dumps({"ready_file": str(ready_file)}),
+        )
+        self.assertEqual(code, 1)
+        run_id = json.loads(out)["run_id"]
+        code, out, _ = self.invoke(
+            "retry", "examples.recoverable:workflow", run_id, "--task", "publish", "--dry-run"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["preserved"], ["extract"])
+        with Store(self.db) as store:
+            self.assertEqual(store.run(run_id)["status"], "failed")
+        ready_file.touch()
+        code, out, err = self.invoke(
+            "retry", "examples.recoverable:workflow", run_id, "--task", "publish"
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["outputs"]["publish"]["published"], 128)
+        with Store(self.db) as store:
+            self.assertEqual(store.tasks(run_id)["extract"]["attempts"], 1)
+            self.assertEqual(store.tasks(run_id)["publish"]["attempts"], 3)
+        self.assertEqual(self.invoke("retry", "examples.recoverable:workflow", run_id)[0], 2)
+
+    def test_read_commands_and_dry_run_do_not_create_database(self):
+        for args in (
+            ("runs",),
+            ("inspect", "missing"),
+            ("events", "missing"),
+            ("retry", "examples.recoverable:workflow", "missing", "--dry-run"),
+        ):
+            self.assertEqual(self.invoke(*args)[0], 2)
+            self.assertFalse(Path(self.db).exists())

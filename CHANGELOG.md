@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Selectively retry failed branches through `Engine.retry` and `retrace retry`, including dry-run plans.
+- Preserve successful checkpoints, cumulative attempt history, and idempotency keys during retry.
+- Atomically reopen only eligible blocked descendants; retain blocks caused by unselected failures.
+- Open inspection and dry-run CLI commands read-only, without creating missing databases.
+
 ## 0.1.0 — 2026-09-13
 
 Initial alpha release.

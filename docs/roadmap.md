@@ -2,6 +2,10 @@
 
 This is a direction, not a delivery promise. v0.1 is focused on inspectable local durability.
 
+## Implemented since v0.1
+
+- Selective failed-branch retry with read-only preview, fresh failure budgets, and preserved history.
+
 ## Small, well-scoped contributions
 
 - **Inspector event filters.** Filter by task and event kind without changing event ordering or
@@ -15,8 +19,6 @@ This is a direction, not a delivery promise. v0.1 is focused on inspectable loca
 
 ## Design proposals welcome
 
-- **Selective retry.** Reset failed steps while preserving the audit log and invalidating the
-  correct descendant closure. Decide how attempt budgets, versions, and terminal run identity work.
 - **Retry classification and jitter.** Persist the selected retry deadline, with a deterministic
   test hook and clear treatment of nonretryable errors.
 - **Retention and compaction.** Define what can be removed without breaking checkpoint integrity,

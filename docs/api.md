@@ -79,6 +79,29 @@ at least 0.3 s. The minimum is intended for tests; the default gives real worklo
 Never call blocking code on the event loop. `asyncio.to_thread` can offload blocking work, but
 cancelling the awaiting coroutine does not forcibly stop the underlying thread or its effects.
 
+## Explicit retry and preview
+
+```python
+plan = store.retry_plan(workflow, run_id, task_names=["fetch"])
+result = await engine.retry(workflow, run_id, tasks=["fetch"])
+```
+
+Omit the selection to retry all failed steps. `RetryPlan` contains sorted tuples: `selected`,
+`reset`, `preserved` (successful checkpoints), `remaining_failed`, and `remaining_blocked`, plus
+`run_id`. Preview does not mutate the database and works with `Store(path, readonly=True)`.
+
+`Store.retry_failed(workflow, run_id, task_names=None)` performs the atomic reset without starting
+a worker and returns the applied plan. Follow it with `Engine.resume`. `Engine.retry` combines
+those two operations. Retry is valid only for failed runs and currently failed selected steps;
+empty, duplicate, unknown, blocked, or successful selections are rejected with `ValueError`.
+Live ownership raises `RunBusy`; changed definitions raise `DefinitionMismatch`.
+
+Reset tasks receive a fresh failure budget. `tasks[name]["failures"]` is the current budget count;
+`attempts` and the attempt journal remain cumulative. Shared descendants are reopened only when
+all dependencies are already successful or included in the recovery plan. The run can remain
+failed if an unselected branch is still failed. No inputs, function versions, or successful
+outputs are changed. [Read the full recovery contract](recovery.md).
+
 ## CLI
 
 Global flags go **before** the subcommand:
@@ -86,6 +109,8 @@ Global flags go **before** the subcommand:
 ```bash
 retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{"count":128}'
 retrace --db jobs.db resume my_pipeline:workflow <RUN_ID>
+retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch --dry-run
+retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect <RUN_ID>
 retrace --db jobs.db events <RUN_ID> --after 42
@@ -95,7 +120,8 @@ retrace --db jobs.db serve --port 7760
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
+`runs`, `inspect`, `events`, and `retry --dry-run` open read-only connections and never create
+a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
 

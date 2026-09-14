@@ -7,6 +7,7 @@ import contextlib
 import json
 import math
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +35,13 @@ class Engine:
 
     async def run(self, workflow: Workflow, input: Any = None) -> RunResult:
         run_id = self.store.create(workflow, input)
+        return await self.resume(workflow, run_id)
+
+    async def retry(
+        self, workflow: Workflow, run_id: str, *, tasks: Sequence[str] | None = None
+    ) -> RunResult:
+        """Retry selected failures (all by default) and their eligible blocked descendants."""
+        self.store.retry_failed(workflow, run_id, tasks)
         return await self.resume(workflow, run_id)
 
     def _result(self, run_id: str) -> RunResult:

@@ -50,6 +50,20 @@ attempt stays visible in the timeline; a new worker completes the run. The integ
 also kills a real child process without cleanup, resumes it in a different process, verifies
 that a completed step ran once, and checks SQLite integrity.
 
+## Recover a failed branch
+
+Fix the external cause of a failure, then preview and retry only the affected work:
+
+```bash
+retrace retry pipeline:workflow <RUN_ID> --task publish --dry-run
+retrace retry pipeline:workflow <RUN_ID> --task publish
+```
+
+Omit `--task` to retry all failed steps, or repeat it to select several. Successful steps stay
+committed; eligible blocked descendants are reopened. Shared downstream steps remain blocked
+while any dependency is still failed. Attempt numbers, idempotency keys, and history are preserved.
+See [the recovery guide](docs/recovery.md) for a runnable example and the exact failure-budget rules.
+
 ## A workflow is ordinary Python
 
 ```python
@@ -108,6 +122,7 @@ asyncio.run(main())
 | Crash recovery | Expired run leases are reclaimed; successful steps are reused |
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
+| Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
 | Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses the run |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
@@ -124,8 +139,8 @@ asyncio.run(main())
   different worker processes against the same local SQLite file. There is no distributed
   task queue or automatic worker daemon.
 - **Completed outputs are immutable checkpoints.** Retrace resumes from them; it does not
-  replay successful functions. Exhausted failed runs are terminal; start a new run after fixing
-  the cause. Selective retry is on the roadmap.
+  replay successful functions. After fixing an external failure, explicitly retry failed steps
+  with `retrace retry`. Use `--dry-run` to preview the affected steps; `resume` never resets failures.
 - **Bump `Workflow.version` when implementation behavior changes.** The fingerprint covers
   graph structure, function identity, retry policy, and timeouts, not function source or dependencies.
 - **Tasks must cooperate with asyncio.** Blocking CPU work delays heartbeats. Timeouts and

@@ -47,6 +47,7 @@ stateDiagram-v2
     running --> failed: terminal task failure
     running --> paused: graceful cancellation / scheduler error
     paused --> running: resume
+    failed --> pending: explicit selective retry
     running --> running: expired lease reclaimed under new epoch
 ```
 
@@ -60,16 +61,33 @@ stateDiagram-v2
     running --> failed: failure budget exhausted
     pending --> blocked: failed or blocked dependency
     running --> pending: interrupted attempt recovered
+    failed --> pending: explicit retry
+    blocked --> pending: all dependencies recovered or selected
 ```
 
 Independent branches finish after a task fails; descendants are marked blocked without
-execution. A run becomes failed when no executable work remains. Failed and succeeded runs
-are terminal: `resume` returns their existing result without retrying functions.
+execution. A run becomes failed when no executable work remains. `resume` returns existing
+results for failed and succeeded runs without retrying functions. Explicit `retry` can reopen a
+failed run. It validates the same workflow fingerprint, checks ownership, and atomically resets
+selected failed steps and blocked descendants whose dependencies can all make progress. Successful
+checkpoints stay unchanged. A branch left failed keeps its shared descendants blocked.
+
+Retry resets each affected task's current failure budget to zero, while preserving attempt numbers,
+attempt records, idempotency keys, and all existing events. Each `task.reset` event records the
+previous status and budget count, followed by `run.retry_requested`. The run becomes pending and
+is then claimed normally with a new epoch. If the process exits between reset and execution,
+`resume` continues the pending run. Competing reset requests serialize in `BEGIN IMMEDIATE`;
+a second request sees the pending/running state and cannot reset the same failure again.
+
+`Store.retry_plan` uses a read-only transaction for a consistent preview. It is a snapshot, not a
+reservation: applying retry revalidates the current state inside the write transaction. No schema
+change is needed; version-1 databases remain compatible. See [the recovery guide](recovery.md).
 
 `RetryPolicy.max_attempts` is the budget for **failed** attempts. A task with `max_attempts=3`
 may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
 and do not consume the failure budget; repeated crashes may therefore create more than three
-attempt records. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
+attempt records. Manual retry opens a fresh failure budget, so lifetime failures can also exceed
+`max_attempts`; the attempt journal retains that history. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
 Jitter and exception-specific retry filters are future work.
 
 ## Commit boundary and side effects

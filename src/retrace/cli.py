@@ -43,6 +43,17 @@ def parser() -> argparse.ArgumentParser:
     resume = commands.add_parser("resume", help="resume an interrupted run")
     resume.add_argument("workflow")
     resume.add_argument("run_id")
+    retry = commands.add_parser(
+        "retry", help="retry failed steps, preserving successful checkpoints"
+    )
+    retry.add_argument("workflow")
+    retry.add_argument("run_id")
+    retry.add_argument(
+        "--task", action="append", help="failed task to retry; repeat to select several"
+    )
+    retry.add_argument(
+        "--dry-run", action="store_true", help="print the retry plan without executing"
+    )
     demo = commands.add_parser("demo", help="run a document-indexing simulation")
     demo.add_argument(
         "--crash", action="store_true", help="hard-exit during embedding; resume afterward"
@@ -68,7 +79,10 @@ def main(argv: list[str] | None = None) -> int:
 
             serve(args.db, args.port)
             return 0
-        with Store(args.db) as store:
+        readonly = args.command in ("runs", "inspect", "events") or (
+            args.command == "retry" and args.dry_run
+        )
+        with Store(args.db, readonly=readonly) as store:
             if args.command == "runs":
                 print(json.dumps(store.runs(), indent=2))
             elif args.command == "inspect":
@@ -93,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                 spec = "retrace.demo:workflow" if args.command == "demo" else args.workflow
                 workflow = load_workflow(spec)
                 engine = Engine(store, concurrency=args.concurrency, lease_ttl=args.lease_ttl)
-                if args.command == "resume":
+                if args.command in ("resume", "retry"):
                     run_id = args.run_id
                 else:
                     data = (
@@ -108,7 +122,17 @@ def main(argv: list[str] | None = None) -> int:
                         file=sys.stderr,
                         flush=True,
                     )
-                result = asyncio.run(engine.resume(workflow, run_id))
+                if args.command == "retry" and args.dry_run:
+                    print(
+                        json.dumps(asdict(store.retry_plan(workflow, run_id, args.task)), indent=2)
+                    )
+                    return 0
+                execution = (
+                    engine.retry(workflow, run_id, tasks=args.task)
+                    if args.command == "retry"
+                    else engine.resume(workflow, run_id)
+                )
+                result = asyncio.run(execution)
                 print(json.dumps(asdict(result), indent=2))
                 return 0 if result.status == "succeeded" else 1
     except KeyboardInterrupt:
