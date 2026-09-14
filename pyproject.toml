@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retrace-engine"
+version = "0.1.0"
+description = "Crash-resumable Python workflows. One SQLite file. No services."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Sanjay Santhanam"}]
+keywords = ["workflow", "durable-execution", "sqlite", "asyncio", "dag"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff==0.12.12", "coverage==7.10.6", "build==1.3.0"]
+
+[project.scripts]
+retrace = "retrace.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Sanjays2402/retrace"
+Issues = "https://github.com/Sanjays2402/retrace/issues"
+Documentation = "https://github.com/Sanjays2402/retrace/tree/main/docs"
+
+[tool.setuptools.package-data]
+retrace = ["static/*", "py.typed"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.coverage.run]
+source = ["retrace"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
