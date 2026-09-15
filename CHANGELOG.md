@@ -1,11 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-15
 
 - Selectively retry failed branches through `Engine.retry` and `retrace retry`, including dry-run plans.
 - Preserve successful checkpoints, cumulative attempt history, and idempotency keys during retry.
 - Atomically reopen only eligible blocked descendants; retain blocks caused by unselected failures.
 - Open inspection and dry-run CLI commands read-only, without creating missing databases.
+
+- Filter inspector events by task, kind, and payload text; export shown events as chronological JSONL.
+- Expand event payloads while preserving their open state during polling.
+- Show lifetime failures separately from the current retry budget.
+- Add 11 Python tests and five browser tests, bringing the suites to 46 and 10 respectively.
 
 ## 0.1.0 — 2026-09-13
 

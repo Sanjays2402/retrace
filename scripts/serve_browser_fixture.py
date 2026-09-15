@@ -17,10 +17,19 @@ async def fail(ctx):
     raise RuntimeError("fixture failure")
 
 
+async def recover(ctx):
+    if ctx.attempt == 1:
+        raise ConnectionError("fixture recovered after manual retry")
+    return {"recovered": True}
+
+
 async def populate(path):
     with Store(path) as store:
         await Engine(store).run(Workflow("html-output", (Task("output", untrusted_output),)))
         await Engine(store).run(Workflow("failed-run", (Task("fail", fail, retry=RetryPolicy(1)),)))
+        recovered = Workflow("recovered-run", (Task("recover", recover, retry=RetryPolicy(1)),))
+        result = await Engine(store).run(recovered)
+        await Engine(store).retry(recovered, result.run_id)
         await Engine(store).run(workflow, {"crash": False})
 
 

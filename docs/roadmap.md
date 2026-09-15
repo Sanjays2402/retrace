@@ -1,15 +1,14 @@
 # Roadmap
 
-This is a direction, not a delivery promise. v0.1 is focused on inspectable local durability.
+This is a direction, not a delivery promise. v0.2 is focused on inspectable local durability.
 
 ## Implemented since v0.1
 
 - Selective failed-branch retry with read-only preview, fresh failure budgets, and preserved history.
+- Inspector journal filters, payload search/expansion, and filtered JSONL export without losing incoming events.
 
 ## Small, well-scoped contributions
 
-- **Inspector event filters.** Filter by task and event kind without changing event ordering or
-  dropping incoming events. Include empty states, keyboard support, and a browser test.
 - **Graph navigation.** Add fit-to-view and zoom controls while preserving readable labels and
   keyboard access. Large graphs should not overflow the page itself.
 - **Retry examples.** Demonstrate a deduplicated HTTP mutation against a small local test server.

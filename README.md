@@ -126,7 +126,7 @@ asyncio.run(main())
 | Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses the run |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
-| Local dashboard | Live polling, dependency graph, attempt timeline, search and status filters |
+| Local dashboard | Live polling, graph, attempt timeline, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
 | Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |
 
@@ -167,12 +167,12 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **35 tests**, 25 reproducible generated DAGs, transactional rollback
+The Python suite includes **46 tests**, 25 reproducible generated DAGs, transactional rollback
 injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
-Five Playwright browser tests cover real inspector interactions and failure states.
+Ten Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.
 
 A [reproducible local benchmark](docs/benchmark.md) records scheduler/checkpoint overhead and its limits.

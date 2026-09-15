@@ -1,6 +1,6 @@
 # Security
 
-Retrace v0.1 is an early-alpha local development tool for trusted Python workflows.
+Retrace v0.2 is an early-alpha local development tool for trusted Python workflows.
 
 - Workflow modules execute arbitrary Python in the worker's process. Do not import definitions
   from untrusted sources. Retrace is not a sandbox.

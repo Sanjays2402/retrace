@@ -133,7 +133,10 @@ Store blobs externally and return references/checksums.
 The inspector opens a read-only SQLite connection per HTTP request and reads each multi-table
 snapshot inside a single transaction. The server never imports workflow modules. Browser polling
 fetches the latest 100 runs and ordered journal pages, with an exclusive event cursor. The browser
-retains the latest 1,000 received events; `retrace events` exports the complete journal.
+retains the latest 1,000 received events. Task, kind, and payload-text filters operate on that
+retained window without changing the fetch cursor. JSONL download exports the matching events
+in ascending ID order; `retrace events` exports the complete journal. Filters reset when changing
+runs, and expanded event payloads stay open during polling.
 
 The UI treats stored values as data and escapes markup. Task outputs use `textContent`. The server
 binds only to `127.0.0.1`, validates Host and Origin, sends a restrictive Content Security Policy,

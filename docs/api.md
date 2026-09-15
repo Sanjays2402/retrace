@@ -141,3 +141,14 @@ All responses are JSON with `Cache-Control: no-store`. Read-only requests open t
 connection. Unknown resources return `404`, invalid cursor values `400`, forbidden Host/Origin
 headers `403`, and database access errors `503`. There are no write routes, authentication tokens,
 or remote bind options. See [SECURITY.md](../SECURITY.md) before using real data.
+
+## Journal filtering in the inspector
+
+Use the task and event-kind selectors together with payload search to narrow the retained
+journal. “Show this step's events” applies the selected graph node as a task filter. Clear filters
+to restore all retained events. Expand Payload to inspect retry/reset metadata.
+
+“Export shown · JSONL” downloads exactly the matching retained events in ascending event-ID
+order. The inspector retains only the latest 1,000 events received; its filters do not change
+fetch cursors or discard nonmatching incoming events. For the complete journal, use
+`retrace events RUN_ID > events.jsonl`. Export is disabled when nothing matches.

@@ -803,3 +803,71 @@ footer a {
     font-size: 8px;
   }
 }
+
+.event-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 13px;
+}
+.event-filters select,
+.event-filters input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fcfdf9;
+  color: var(--ink);
+  font: 10px var(--mono);
+  padding: 7px;
+}
+.event-filters input {
+  grid-column: 1 / -1;
+}
+.event-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+.text-button {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--green);
+  font: 9px var(--mono);
+  text-align: left;
+}
+.text-button:hover {
+  text-decoration: underline;
+}
+.text-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: none;
+}
+#filter-step {
+  margin-top: 7px;
+}
+.event-retention {
+  font: 8px/1.6 var(--mono);
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+.event details {
+  margin-top: 5px;
+}
+.event summary {
+  cursor: pointer;
+  color: var(--green);
+  font-size: 8px;
+}
+.event pre {
+  font-size: 9px;
+  padding: 8px;
+  max-height: 180px;
+  margin-bottom: 0;
+}
+.event > div {
+  min-width: 0;
+}

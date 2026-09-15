@@ -4,10 +4,12 @@ import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 import venv
 from pathlib import Path
 
-wheel = next(Path("dist").glob("*.whl")).resolve()
+version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+wheel = Path("dist", f"retrace_engine-{version}-py3-none-any.whl").resolve()
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     venv.create(root / "venv", with_pip=True)
@@ -27,9 +29,11 @@ with tempfile.TemporaryDirectory() as directory:
         [
             str(python),
             "-c",
+            "import retrace, sys; assert retrace.__version__ == sys.argv[1]; "
             "from importlib.resources import files; "
             "assert files('retrace').joinpath('static','index.html').is_file(); "
             "assert files('retrace').joinpath('static','app.js').is_file()",
+            version,
         ],
         cwd=root,
         check=True,

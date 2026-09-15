@@ -17,6 +17,7 @@ const state = {
   events: [],
   cursor: 0,
   busy: false,
+  eventRenderKey: "",
 };
 const badge = (status) =>
   `<span class="badge ${escapeHTML(status)}">${escapeHTML(status)}</span>`;
@@ -161,8 +162,11 @@ function renderTask() {
   $("task-title").textContent = task.name;
   $("task-badge").textContent = task.status;
   $("task-badge").className = `badge ${task.status}`;
+  const lifetimeFailures = state.detail.attempts.filter(
+    (a) => a.task_name === task.name && a.status === "failed",
+  ).length;
   $("task-meta").textContent =
-    `${task.attempts} attempts · ${task.failures} failures · ${task.finished_at && task.started_at ? duration(task.finished_at - task.started_at) : "awaiting checkpoint"}`;
+    `${task.attempts} attempts · ${lifetimeFailures} lifetime failure${lifetimeFailures === 1 ? "" : "s"} · ${task.failures} in current budget`;
   $("task-output").textContent =
     task.error ||
     (task.status === "succeeded"
@@ -194,17 +198,95 @@ function renderDetail() {
   renderTimeline(detail);
   renderTask();
 }
-function renderEvents() {
-  $("event-count").textContent =
-    `${state.events.length}${state.events.length >= 1000 ? "+" : ""} events`;
-  $("event-list").innerHTML = state.events
-    .slice()
-    .reverse()
+function syncOptions(id, choices) {
+  const element = $(id);
+  const signature = JSON.stringify(choices);
+  if (element.dataset.choices === signature) return;
+  const value = element.value;
+  element.innerHTML = choices
     .map(
-      (e) =>
-        `<div class="event"><time>${clock(e.at)}</time><div><strong>${escapeHTML(e.kind)}</strong><small>${escapeHTML(e.task_name || `run · epoch ${e.payload.epoch || state.detail?.run.epoch || 1}`)}${e.payload.error ? ` · ${escapeHTML(e.payload.error)}` : ""}</small></div></div>`,
+      ([key, label]) =>
+        `<option value="${escapeHTML(key)}">${escapeHTML(label)}</option>`,
     )
     .join("");
+  element.value = choices.some(([key]) => key === value) ? value : "";
+  element.dataset.choices = signature;
+}
+function filteredEvents() {
+  const task = $("event-task").value;
+  const kind = $("event-kind").value;
+  const query = $("event-query").value.toLowerCase();
+  return state.events.filter(
+    (event) =>
+      (!task ||
+        (task === "__run__"
+          ? event.task_name === null
+          : event.task_name === task)) &&
+      (!kind || event.kind === kind) &&
+      (!query ||
+        `${event.kind} ${event.task_name || ""} ${JSON.stringify(event.payload)}`
+          .toLowerCase()
+          .includes(query)),
+  );
+}
+function renderEvents() {
+  syncOptions("event-task", [
+    ["", "All tasks"],
+    ["__run__", "Run events"],
+    ...Object.keys(state.detail?.tasks || {})
+      .sort()
+      .map((name) => [name, name]),
+  ]);
+  const kinds = new Set(state.events.map((event) => event.kind));
+  if ($("event-kind").value) kinds.add($("event-kind").value);
+  syncOptions("event-kind", [
+    ["", "All kinds"],
+    ...[...kinds].sort().map((kind) => [kind, kind]),
+  ]);
+  const filtered = filteredEvents();
+  const list = $("event-list");
+  const oldTop = list.scrollTop,
+    oldHeight = list.scrollHeight;
+  const key = JSON.stringify([
+    state.selected,
+    $("event-task").value,
+    $("event-kind").value,
+    $("event-query").value,
+  ]);
+  const open = new Set(
+    [...list.querySelectorAll("details[open]")].map((el) => el.dataset.event),
+  );
+  $("event-count").textContent =
+    `${filtered.length} / ${state.events.length} shown`;
+  $("export-events").disabled = filtered.length === 0;
+  list.innerHTML =
+    filtered
+      .slice()
+      .reverse()
+      .map((e) => {
+        const payload = Object.fromEntries(
+          Object.entries(e.payload).filter(([, value]) => value !== null),
+        );
+        const details = Object.keys(payload).length
+          ? `<details data-event="${e.id}" ${open.has(String(e.id)) ? "open" : ""}><summary>Payload</summary><pre>${escapeHTML(JSON.stringify(payload, null, 2))}</pre></details>`
+          : "";
+        return `<div class="event" data-event-id="${e.id}"><time>${clock(e.at)}</time><div><strong>${escapeHTML(e.kind)}</strong><small>${escapeHTML(e.task_name || "run")}${e.payload.error ? ` · ${escapeHTML(e.payload.error)}` : ""}</small>${details}</div></div>`;
+      })
+      .join("") || '<p class="no-results">No events match these filters.</p>';
+  list.scrollTop =
+    key === state.eventRenderKey && oldTop > 4
+      ? Math.max(0, oldTop + list.scrollHeight - oldHeight)
+      : 0;
+  state.eventRenderKey = key;
+  $("event-retention").textContent =
+    state.events.length >= 1000
+      ? "Showing the latest 1,000 retained events. Use retrace events for the full journal."
+      : "Export includes shown events in chronological order.";
+}
+function clearEventFilters() {
+  $("event-task").value = "";
+  $("event-kind").value = "";
+  $("event-query").value = "";
 }
 async function refresh() {
   if (state.busy) return;
@@ -257,6 +339,7 @@ $("run-list").addEventListener("click", (event) => {
   state.events = [];
   state.cursor = 0;
   state.detail = null;
+  clearEventFilters();
   $("run-detail").hidden = true;
   renderRuns();
   refresh();
@@ -271,6 +354,33 @@ $("graph").addEventListener("click", (event) => {
       n.classList.toggle("selected", n.dataset.task === state.task),
     );
   renderTask();
+});
+$("filter-step").addEventListener("click", () => {
+  clearEventFilters();
+  $("event-task").value = state.task || "";
+  renderEvents();
+});
+$("clear-events").addEventListener("click", () => {
+  clearEventFilters();
+  renderEvents();
+});
+["event-task", "event-kind"].forEach((id) =>
+  $(id).addEventListener("change", renderEvents),
+);
+$("event-query").addEventListener("input", renderEvents);
+$("export-events").addEventListener("click", () => {
+  const events = filteredEvents();
+  if (!events.length) return;
+  const url = URL.createObjectURL(
+    new Blob([events.map((e) => JSON.stringify(e)).join("\n") + "\n"], {
+      type: "application/x-ndjson",
+    }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `retrace-${state.selected.replace(/[^a-zA-Z0-9_-]/g, "_")}-events.jsonl`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 document.querySelectorAll("[data-view]").forEach((button) =>
   button.addEventListener("click", () => {

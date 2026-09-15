@@ -28,7 +28,7 @@
         <span class="small-label">BUILT TO PICK UP AGAIN</span>
         <p>The process can stop.<br />The progress stays.</p>
         <span class="version"
-          >v0.1.0 <span>•</span> zero runtime dependencies</span
+          >v0.2.0 <span>•</span> zero runtime dependencies</span
         >
       </div>
     </aside>
@@ -153,6 +153,9 @@
                   <span id="task-badge" class="badge"></span>
                 </div>
                 <div id="task-meta" class="muted"></div>
+                <button id="filter-step" class="text-button">
+                  Show this step's events ↗
+                </button>
                 <pre id="task-output">Select a step in the graph.</pre>
               </section>
               <section class="event-panel">
@@ -160,7 +163,31 @@
                   <h3>Event journal</h3>
                   <span class="muted" id="event-count">0 events</span>
                 </div>
+                <div class="event-filters">
+                  <select id="event-task" aria-label="Filter events by task">
+                    <option value="">All tasks</option>
+                  </select>
+                  <select id="event-kind" aria-label="Filter events by kind">
+                    <option value="">All kinds</option>
+                  </select>
+                  <input
+                    id="event-query"
+                    aria-label="Search event payloads"
+                    placeholder="Search journal and payloads…"
+                  />
+                </div>
+                <div class="event-actions">
+                  <button id="clear-events" class="text-button">
+                    Clear filters
+                  </button>
+                  <button id="export-events" class="text-button">
+                    Export shown · JSONL ↓
+                  </button>
+                </div>
                 <div id="event-list"></div>
+                <p id="event-retention" class="event-retention">
+                  Latest 1,000 events retained in this view.
+                </p>
               </section>
             </div>
           </div>
