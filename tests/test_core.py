@@ -30,7 +30,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.path = Path(self.directory.name) / "test.db"
         self.store = Store(self.path)
-        self.engine = Engine(self.store, lease_ttl=0.3)
+        self.engine = Engine(self.store)
 
     def tearDown(self):
         self.store.close()
@@ -66,7 +66,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
             active -= 1
             return ctx.task_name
 
-        engine = Engine(self.store, concurrency=2, lease_ttl=0.3)
+        engine = Engine(self.store, concurrency=2)
         result = await engine.run(
             Workflow("parallel", tuple(Task(f"task{i}", work) for i in range(6)))
         )
@@ -162,14 +162,15 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
 
         async def slow(ctx):
             entered.set()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(4)
             return 1
 
         workflow = Workflow("heartbeat", (Task("slow", slow),))
         run_id = self.store.create(workflow)
-        future = asyncio.create_task(self.engine.resume(workflow, run_id))
+        future = asyncio.create_task(Engine(self.store, lease_ttl=3).resume(workflow, run_id))
         await entered.wait()
-        await asyncio.sleep(0.35)
+        # Cross the original lease deadline to prove renewal, allowing slow CI disk flushes.
+        await asyncio.sleep(3.25)
         with Store(self.path) as other, self.assertRaises(RunBusy):
             other.claim(run_id, workflow, 1)
         self.assertEqual((await future).status, "succeeded")

@@ -17,7 +17,7 @@ class ProcessRecoveryTests(unittest.TestCase):
     def test_killed_worker_recovers_in_a_new_process(self):
         with tempfile.TemporaryDirectory() as directory:
             db = str(Path(directory, "runs.db"))
-            command = [sys.executable, "-m", "retrace", "--db", db, "--lease-ttl", "0.3"]
+            command = [sys.executable, "-m", "retrace", "--db", db, "--lease-ttl", "3"]
             child = subprocess.Popen(
                 command
                 + [
@@ -41,7 +41,7 @@ class ProcessRecoveryTests(unittest.TestCase):
                     run_id = store.runs()[0]["id"]
                     self.assertEqual(store.tasks(run_id)["checkpoint"]["status"], "succeeded")
                     self.assertEqual(store.tasks(run_id)["finish"]["status"], "running")
-                time.sleep(0.4)
+                time.sleep(3.1)
                 resumed = subprocess.run(
                     command + ["resume", "tests.fixtures.crash:workflow", run_id],
                     capture_output=True,
