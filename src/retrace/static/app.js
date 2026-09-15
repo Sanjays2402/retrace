@@ -166,7 +166,7 @@ function renderTask() {
     (a) => a.task_name === task.name && a.status === "failed",
   ).length;
   $("task-meta").textContent =
-    `${task.attempts} attempts · ${lifetimeFailures} lifetime failure${lifetimeFailures === 1 ? "" : "s"} · ${task.failures} in current budget`;
+    `${task.attempts} attempt${task.attempts === 1 ? "" : "s"} · ${lifetimeFailures} lifetime failure${lifetimeFailures === 1 ? "" : "s"} · ${task.failures} in current budget`;
   $("task-output").textContent =
     task.error ||
     (task.status === "succeeded"
