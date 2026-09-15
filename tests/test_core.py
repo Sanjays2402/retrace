@@ -146,10 +146,16 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         )
         run_id = self.store.create(workflow)
         future = asyncio.create_task(self.engine.resume(workflow, run_id))
-        await asyncio.wait_for(entered.wait(), 2)
-        future.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await future
+        try:
+            # Readiness is a condition, not a filesystem latency benchmark.
+            await asyncio.wait_for(entered.wait(), 30)
+            future.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await future
+        finally:
+            # Also clean up on assertion/timeout failures before tearDown closes SQLite.
+            future.cancel()
+            await asyncio.gather(future, return_exceptions=True)
         self.assertEqual(self.store.run(run_id)["status"], "paused")
         pause = False
         result = await self.engine.resume(workflow, run_id)
