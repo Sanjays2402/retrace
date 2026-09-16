@@ -168,12 +168,12 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **46 tests**, 25 reproducible generated DAGs, transactional rollback
+The Python suite includes **48 tests**, 25 reproducible generated DAGs, transactional rollback
 injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
-Ten Playwright browser tests cover real inspector interactions and failure states.
+Eleven Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.
 
 A [reproducible local benchmark](docs/benchmark.md) records scheduler/checkpoint overhead and its limits.
@@ -186,3 +186,21 @@ semantics easier to verify, improve operational visibility, or remove a concrete
 include a minimal workflow and the relevant journal events with sensitive data removed.
 
 MIT licensed. Built by [Sanjay Santhanam](https://github.com/Sanjays2402).
+
+### Performance trace export and graph navigation
+
+Export every recorded attempt, including failures and recovery history:
+
+```sh
+retrace --db retrace.db trace RUN_ID > run.trace.json
+```
+
+Open the JSON in [Perfetto](https://ui.perfetto.dev) using **Open trace file**.
+The exporter uses the [Chrome JSON trace format](https://perfetto.dev/docs/getting-started/other-formats),
+with one lane per task and microsecond timestamps relative to run creation.
+Unfinished attempts appear as instant events because their end time is unknown.
+Inputs, outputs, and exception messages are excluded; workflow and task names remain.
+Export uses a consistent read-only snapshot and never imports workflow code.
+
+The local inspector now includes **Zoom in**, **Zoom out**, **Fit graph**, and
+**Reset zoom**. Fit follows viewport changes, and live polling preserves your zoom.

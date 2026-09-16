@@ -69,6 +69,8 @@ def parser() -> argparse.ArgumentParser:
     )
     events.add_argument("run_id")
     events.add_argument("--after", type=int, default=0, help="exclusive event cursor")
+    trace = commands.add_parser("trace", help="export Chrome Trace JSON for Perfetto")
+    trace.add_argument("run_id")
     serve = commands.add_parser("serve", help="open a read-only local dashboard")
     serve.add_argument("--port", type=int, default=7760)
     return root
@@ -82,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
 
             serve(args.db, args.port)
             return 0
-        readonly = args.command in ("runs", "inspect", "events") or (
+        readonly = args.command in ("runs", "inspect", "events", "trace") or (
             args.command == "retry" and args.dry_run
         )
         with Store(args.db, readonly=readonly) as store:
@@ -99,6 +101,10 @@ def main(argv: list[str] | None = None) -> int:
                         indent=2,
                     )
                 )
+            elif args.command == "trace":
+                from retrace.trace import export_trace
+
+                print(json.dumps(export_trace(store, args.run_id), allow_nan=False))
             elif args.command == "events":
                 store.run(args.run_id)
                 cursor = args.after

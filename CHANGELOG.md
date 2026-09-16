@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Read-only Chrome Trace JSON export with task lanes, retry history, and explicit unfinished attempts.
+- Inspector graph zoom, responsive fit, and reset controls preserved across live polling.
+
+
 ## 0.2.0 — 2026-09-15
 
 - Selectively retry failed branches through `Engine.retry` and `retrace retry`, including dry-run plans.

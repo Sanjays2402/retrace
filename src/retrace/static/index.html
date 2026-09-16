@@ -127,8 +127,15 @@
               ><span id="checkpoint-count"></span>
             </div>
             <div id="graph-view" role="tabpanel" aria-labelledby="tab-graph">
+              <div class="graph-controls" aria-label="Graph controls">
+                <button id="zoom-out" aria-label="Zoom out">−</button>
+                <output id="zoom-level" aria-live="polite">100%</output>
+                <button id="zoom-in" aria-label="Zoom in">+</button>
+                <button id="zoom-fit">Fit graph</button>
+                <button id="zoom-reset">Reset zoom</button>
+              </div>
               <div class="graph-scroll">
-                <div id="graph" class="graph"></div>
+                <div id="graph-stage"><div id="graph" class="graph"></div></div>
               </div>
               <div class="graph-legend">
                 <span><i class="legend-dot succeeded"></i>Committed</span

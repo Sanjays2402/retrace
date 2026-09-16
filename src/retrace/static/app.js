@@ -9,6 +9,10 @@ const escapeHTML = (value) =>
       ],
   );
 const state = {
+  zoom: 1,
+  fit: false,
+  graphWidth: 460,
+  graphHeight: 268,
   runs: [],
   selected: null,
   task: null,
@@ -110,6 +114,9 @@ function renderGraph(detail) {
       paths += `<path class="edge" d="M${x1} ${y1} C${x1 + 16} ${y1},${x2 - 16} ${y2},${x2} ${y2}"/>`;
     }),
   );
+  state.graphWidth = width;
+  state.graphHeight = height;
+  applyZoom();
   $("graph").style.width = `${width}px`;
   $("graph").style.height = `${height}px`;
   $("graph").innerHTML =
@@ -393,3 +400,35 @@ document.querySelectorAll("[data-view]").forEach((button) =>
 );
 refresh();
 setInterval(refresh, 1000);
+
+function applyZoom() {
+  const viewport = document.querySelector(".graph-scroll");
+  if (state.fit && viewport.clientWidth)
+    state.zoom = Math.min(1, viewport.clientWidth / state.graphWidth);
+  $("graph").style.transform = `scale(${state.zoom})`;
+  $("graph-stage").style.width = `${state.graphWidth * state.zoom}px`;
+  $("graph-stage").style.height = `${state.graphHeight * state.zoom}px`;
+  $("zoom-level").textContent = `${Math.round(state.zoom * 100)}%`;
+  $("zoom-out").disabled = state.zoom <= 0.25;
+  $("zoom-in").disabled = state.zoom >= 2;
+}
+for (const [id, change] of [
+  ["zoom-in", 0.25],
+  ["zoom-out", -0.25],
+]) {
+  $(id).addEventListener("click", () => {
+    state.fit = false;
+    state.zoom = Math.max(0.25, Math.min(2, state.zoom + change));
+    applyZoom();
+  });
+}
+$("zoom-fit").addEventListener("click", () => {
+  state.fit = true;
+  applyZoom();
+});
+$("zoom-reset").addEventListener("click", () => {
+  state.fit = false;
+  state.zoom = 1;
+  applyZoom();
+});
+new ResizeObserver(applyZoom).observe(document.querySelector(".graph-scroll"));

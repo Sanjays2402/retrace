@@ -39,6 +39,8 @@ class CLITests(unittest.TestCase):
             json.loads(self.invoke("inspect", run_id)[1])["tasks"]["total"]["output"], 6
         )
         self.assertEqual(self.invoke("resume", "examples.pipeline:workflow", run_id)[0], 0)
+        trace = json.loads(self.invoke("trace", run_id)[1])
+        self.assertEqual(len([e for e in trace["traceEvents"] if e["ph"] == "X"]), 4)
         events = [json.loads(line) for line in self.invoke("events", run_id)[1].splitlines()]
         self.assertEqual(events[-1]["kind"], "run.succeeded")
         self.assertEqual(self.invoke("events", run_id, "--after", str(events[-1]["id"]))[1], "")
@@ -63,6 +65,7 @@ class CLITests(unittest.TestCase):
             ("run", "examples.pipeline:workflow", "--input", "{"),
             ("inspect", "missing"),
             ("events", "missing"),
+            ("trace", "missing"),
             ("run", "missing_module:workflow"),
         ):
             code, _, err = self.invoke(*args)
@@ -126,6 +129,7 @@ class CLITests(unittest.TestCase):
             ("runs",),
             ("inspect", "missing"),
             ("events", "missing"),
+            ("trace", "missing"),
             ("retry", "examples.recoverable:workflow", "missing", "--dry-run"),
         ):
             self.assertEqual(self.invoke(*args)[0], 2)

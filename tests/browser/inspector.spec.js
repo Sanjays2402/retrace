@@ -220,3 +220,27 @@ test("manually recovered runs show lifetime failures and reset payloads", async 
   await expect(page.locator("#event-kind")).toHaveValue("");
   await expect(page.locator(".event")).toHaveCount(21);
 });
+
+test("graph zoom survives polling and fit adapts to mobile", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator(".node")).toHaveCount(8);
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect(page.locator("#zoom-level")).toHaveText("125%");
+  await page.waitForTimeout(1200);
+  await expect(page.locator("#zoom-level")).toHaveText("125%");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".graph-scroll")
+        .evaluate((el) => el.scrollWidth - el.clientWidth),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Reset zoom", exact: true }).click();
+  await expect(page.locator("#zoom-level")).toHaveText("100%");
+  await page.locator('[data-task="report"]').click();
+  await expect(page.locator("#task-output")).toContainText("512");
+});
