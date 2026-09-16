@@ -43,6 +43,20 @@ class CLITests(unittest.TestCase):
         self.assertEqual(events[-1]["kind"], "run.succeeded")
         self.assertEqual(self.invoke("events", run_id, "--after", str(events[-1]["id"]))[1], "")
 
+    def test_runs_limit(self):
+        for values in ([1], [2], [3]):
+            self.assertEqual(
+                self.invoke(
+                    "run", "examples.pipeline:workflow", "--input", json.dumps({"values": values})
+                )[0],
+                0,
+            )
+        limited = json.loads(self.invoke("runs", "--limit", "2")[1])
+        self.assertEqual(len(limited), 2)
+        full = json.loads(self.invoke("runs")[1])
+        self.assertEqual(len(full), 3)
+        self.assertEqual(limited, full[:2])
+
     def test_invalid_input_definition_and_unknown_run(self):
         for args in (
             ("run", "bad"),

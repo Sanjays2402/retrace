@@ -92,7 +92,8 @@ workflow = Workflow(
 
 ```bash
 retrace run pipeline:workflow --input '{"values": [3, 7, 11]}'
-retrace runs
+retrace runs                    # latest 100 runs, newest first
+retrace runs --limit 5          # restrict the listing
 retrace events <RUN_ID> > events.jsonl
 ```
 

@@ -58,7 +58,10 @@ def parser() -> argparse.ArgumentParser:
     demo.add_argument(
         "--crash", action="store_true", help="hard-exit during embedding; resume afterward"
     )
-    commands.add_parser("runs", help="list recent runs as JSON")
+    runs = commands.add_parser("runs", help="list recent runs as JSON")
+    runs.add_argument(
+        "--limit", type=int, default=100, help="maximum runs to list (default: 100)"
+    )
     inspect = commands.add_parser("inspect", help="show run checkpoints and attempts as JSON")
     inspect.add_argument("run_id")
     events = commands.add_parser(
@@ -84,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         with Store(args.db, readonly=readonly) as store:
             if args.command == "runs":
-                print(json.dumps(store.runs(), indent=2))
+                print(json.dumps(store.runs(limit=args.limit), indent=2))
             elif args.command == "inspect":
                 print(
                     json.dumps(
