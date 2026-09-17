@@ -168,12 +168,12 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **48 tests**, 25 reproducible generated DAGs, transactional rollback
+The Python suite includes **50 tests**, 25 reproducible generated DAGs, transactional rollback
 injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
-Eleven Playwright browser tests cover real inspector interactions and failure states.
+Twelve Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.
 
 A [reproducible local benchmark](docs/benchmark.md) records scheduler/checkpoint overhead and its limits.
@@ -189,7 +189,7 @@ MIT licensed. Built by [Sanjay Santhanam](https://github.com/Sanjays2402).
 
 ### Performance trace export and graph navigation
 
-Export every recorded attempt, including failures and recovery history:
+Use **Download trace** in the inspector to save the selected run, or export every recorded attempt from the CLI, including failures and recovery history:
 
 ```sh
 retrace --db retrace.db trace RUN_ID > run.trace.json

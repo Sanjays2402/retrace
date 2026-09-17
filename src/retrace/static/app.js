@@ -188,6 +188,9 @@ function renderDetail() {
   $("run-detail").hidden = false;
   $("run-id").textContent = `RUN / ${run.id}`;
   $("workflow-name").textContent = run.name;
+  $("download-trace").href = `/api/runs/${encodeURIComponent(run.id)}/trace`;
+  $("download-trace").download =
+    `retrace-${run.id.replace(/[^a-zA-Z0-9_-]/g, "_")}.trace.json`;
   $("run-status").textContent = effective(run);
   $("run-status").className = `badge ${effective(run)}`;
   $("run-version").textContent = `Definition v${run.version}`;

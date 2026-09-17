@@ -59,9 +59,7 @@ def parser() -> argparse.ArgumentParser:
         "--crash", action="store_true", help="hard-exit during embedding; resume afterward"
     )
     runs = commands.add_parser("runs", help="list recent runs as JSON")
-    runs.add_argument(
-        "--limit", type=int, default=100, help="maximum runs to list (default: 100)"
-    )
+    runs.add_argument("--limit", type=int, default=100, help="maximum runs to list (default: 100)")
     inspect = commands.add_parser("inspect", help="show run checkpoints and attempts as JSON")
     inspect.add_argument("run_id")
     events = commands.add_parser(

@@ -898,3 +898,16 @@ footer a {
 .graph {
   transform-origin: top left;
 }
+
+.run-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+#download-trace {
+  color: var(--green);
+  font: 11px var(--mono);
+  text-decoration: underline;
+  cursor: pointer;
+}

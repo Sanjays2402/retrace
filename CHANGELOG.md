@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Download complete execution traces directly from the inspector.
+- Redesigned checkpoint-and-recovery logo for the inspector, favicon, and README.
+
 - Read-only Chrome Trace JSON export with task lanes, retry history, and explicit unfinished attempts.
 - Inspector graph zoom, responsive fit, and reset controls preserved across live polling.
 

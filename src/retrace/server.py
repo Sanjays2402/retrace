@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from retrace.store import Store
+from retrace.trace import export_trace
 
 _ASSETS = {
     "/": ("index.html", "text/html"),
@@ -67,6 +68,9 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
             parts = url.path.strip("/").split("/")
             try:
                 with Store(path, readonly=True) as store:
+                    if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "trace":
+                        self.send_json(200, export_trace(store, unquote(parts[2])))
+                        return
                     # A read transaction gives the UI a coherent multi-table snapshot.
                     store.db.execute("BEGIN")
                     if parts == ["api", "runs"]:

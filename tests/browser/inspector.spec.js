@@ -244,3 +244,27 @@ test("graph zoom survives polling and fit adapts to mobile", async ({
   await page.locator('[data-task="report"]').click();
   await expect(page.locator("#task-output")).toContainText("512");
 });
+
+test("trace download includes the selected run and all retry attempts", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator(".node")).toHaveCount(8);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download trace" }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const trace = JSON.parse(Buffer.concat(chunks).toString());
+  expect(trace.traceEvents.filter((e) => e.ph === "X")).toHaveLength(9);
+  expect(
+    trace.traceEvents.filter((e) => e.args.status === "failed"),
+  ).toHaveLength(1);
+  expect(download.suggestedFilename()).toContain(trace.retrace.run_id);
+  await page.locator(".run-card").filter({ hasText: "html-output" }).click();
+  await expect(page.locator("#download-trace")).not.toHaveAttribute(
+    "href",
+    `/api/runs/${trace.retrace.run_id}/trace`,
+  );
+});

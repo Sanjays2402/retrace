@@ -86,3 +86,19 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             make_server(path)
         self.assertFalse(path.exists())
+
+    def test_trace_export_preserves_attempts_without_private_output(self):
+        status, headers, body = self.request(f"/api/runs/{self.run_id}/trace")
+        self.assertEqual(status, 200)
+        self.assertIn("application/json", headers["Content-Type"])
+        trace = json.loads(body)
+        self.assertEqual(trace["retrace"]["run_id"], self.run_id)
+        self.assertEqual(len([e for e in trace["traceEvents"] if e["ph"] == "X"]), 1)
+        self.assertNotIn("<script>", body.decode())
+        self.assertEqual(self.request("/api/runs/missing/trace")[0], 404)
+        self.assertEqual(
+            self.request(
+                f"/api/runs/{self.run_id}/trace", headers={"Origin": "https://evil.example"}
+            )[0],
+            403,
+        )
