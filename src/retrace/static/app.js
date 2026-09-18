@@ -14,8 +14,8 @@ const state = {
   graphWidth: 460,
   graphHeight: 268,
   runs: [],
-  selected: null,
-  task: null,
+  selected: new URLSearchParams(location.hash.slice(1)).get("run"),
+  task: new URLSearchParams(location.hash.slice(1)).get("task"),
   detail: null,
   filter: "all",
   events: [],
@@ -37,7 +37,11 @@ const needsAttention = (run) =>
   ["failed", "paused", "interrupted"].includes(effective(run));
 async function api(path) {
   const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 function renderRuns() {
@@ -204,6 +208,7 @@ function renderDetail() {
     `${tasks.filter((t) => t.status === "succeeded").length}/${tasks.length} checkpoints`;
   if (!state.task || !detail.tasks[state.task])
     state.task = tasks.find((t) => t.failures > 0)?.name || tasks[0]?.name;
+  writeLocation(true);
   renderGraph(detail);
   renderTimeline(detail);
   renderTask();
@@ -324,7 +329,10 @@ async function refresh() {
       '<span class="dot"></span>Live · polling every second';
     $("connection").className = "connection";
   } catch (error) {
-    $("connection").textContent = "Connection lost · retrying";
+    $("connection").textContent =
+      error.status === 404
+        ? "Run not found · select another run"
+        : "Connection lost · retrying";
     $("connection").className = "connection offline";
   } finally {
     state.busy = false;
@@ -346,6 +354,7 @@ $("run-list").addEventListener("click", (event) => {
   if (!card || card.dataset.run === state.selected) return;
   state.selected = card.dataset.run;
   state.task = null;
+  writeLocation();
   state.events = [];
   state.cursor = 0;
   state.detail = null;
@@ -358,6 +367,7 @@ $("graph").addEventListener("click", (event) => {
   const node = event.target.closest("[data-task]");
   if (!node) return;
   state.task = node.dataset.task;
+  writeLocation();
   document
     .querySelectorAll("[data-task]")
     .forEach((n) =>
@@ -399,9 +409,9 @@ document.querySelectorAll("[data-view]").forEach((button) =>
       .forEach((b) => b.setAttribute("aria-selected", String(b === button)));
     $("graph-view").hidden = button.dataset.view !== "graph";
     $("timeline-view").hidden = button.dataset.view !== "timeline";
+    writeLocation();
   }),
 );
-refresh();
 setInterval(refresh, 1000);
 
 function applyZoom() {
@@ -435,3 +445,38 @@ $("zoom-reset").addEventListener("click", () => {
   applyZoom();
 });
 new ResizeObserver(applyZoom).observe(document.querySelector(".graph-scroll"));
+
+function writeLocation(replace = false) {
+  if (!state.selected) return;
+  const params = new URLSearchParams({ run: state.selected });
+  if (state.task) params.set("task", state.task);
+  if (!$("timeline-view").hidden) params.set("view", "timeline");
+  const hash = `#${params}`;
+  if (location.hash !== hash)
+    history[replace ? "replaceState" : "pushState"](null, "", hash);
+  $("permalink").href = hash;
+}
+function readLocation() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  state.selected = params.get("run");
+  state.task = params.get("task");
+  state.detail = null;
+  state.events = [];
+  state.cursor = 0;
+  clearEventFilters();
+  $("run-detail").hidden = true;
+  const view = params.get("view") === "timeline" ? "timeline" : "graph";
+  $("graph-view").hidden = view !== "graph";
+  $("timeline-view").hidden = view !== "timeline";
+  document
+    .querySelectorAll("[data-view]")
+    .forEach((button) =>
+      button.setAttribute(
+        "aria-selected",
+        String(button.dataset.view === view),
+      ),
+    );
+  refresh();
+}
+window.addEventListener("hashchange", readLocation);
+readLocation();

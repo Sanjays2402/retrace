@@ -268,3 +268,40 @@ test("trace download includes the selected run and all retry attempts", async ({
     `/api/runs/${trace.retrace.run_id}/trace`,
   );
 });
+
+test("permalinks restore step and timeline across reload and browser history", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator(".node")).toHaveCount(8);
+  await page.locator('[data-task="report"]').click();
+  await page.getByRole("tab", { name: "Attempt timeline" }).click();
+  await expect(page).toHaveURL(/task=report&view=timeline/);
+  await page.reload();
+  await expect(page.locator("#task-output")).toContainText("512");
+  await expect(
+    page.getByRole("tab", { name: "Attempt timeline" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.locator(".run-card").filter({ hasText: "html-output" }).click();
+  await expect(page.locator("#workflow-name")).toHaveText("html-output");
+  await page.goBack();
+  await expect(page.locator("#workflow-name")).toHaveText("document-indexing");
+  await expect(page.locator("#task-output")).toContainText("512");
+  await page.goForward();
+  await expect(page.locator("#workflow-name")).toHaveText("html-output");
+});
+
+test("unknown run permalink can recover by selecting an existing run", async ({
+  page,
+}) => {
+  await page.goto("/#run=missing&task=unknown");
+  await expect(page.locator("#connection")).toHaveText(
+    "Run not found · select another run",
+  );
+  await page
+    .locator(".run-card")
+    .filter({ hasText: "document-indexing" })
+    .click();
+  await expect(page.locator(".node")).toHaveCount(8);
+  await expect(page.locator("#connection")).toContainText("Live");
+});

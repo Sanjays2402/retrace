@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Inspector permalinks preserve the selected run, step, and timeline view across reloads and browser history.
+- Missing run links display an explicit message while keeping other runs accessible.
+
 - Download complete execution traces directly from the inspector.
 - Redesigned checkpoint-and-recovery logo for the inspector, favicon, and README.
 

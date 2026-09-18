@@ -173,7 +173,7 @@ injection, live-lease exclusion, stale-worker fencing, persistent retry deadline
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
-Twelve Playwright browser tests cover real inspector interactions and failure states.
+Fourteen Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.
 
 A [reproducible local benchmark](docs/benchmark.md) records scheduler/checkpoint overhead and its limits.
@@ -204,3 +204,7 @@ Export uses a consistent read-only snapshot and never imports workflow code.
 
 The local inspector now includes **Zoom in**, **Zoom out**, **Fit graph**, and
 **Reset zoom**. Fit follows viewport changes, and live polling preserves your zoom.
+
+Inspector URLs now preserve the selected run, step, and execution view. Use **Permalink**
+to copy a link, bookmark an investigation, or navigate with browser Back and Forward.
+Links refer to the database served by that inspector; localhost links require the same local server.

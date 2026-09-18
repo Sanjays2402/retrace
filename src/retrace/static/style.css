@@ -905,7 +905,8 @@ footer a {
   gap: 12px;
   flex-wrap: wrap;
 }
-#download-trace {
+#download-trace,
+#permalink {
   color: var(--green);
   font: 11px var(--mono);
   text-decoration: underline;
