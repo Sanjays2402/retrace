@@ -159,6 +159,12 @@ asyncio.run(main())
 See [architecture and failure semantics](docs/architecture.md), [the API guide](docs/api.md),
 and [security guidance](SECURITY.md).
 
+## Interactive recovery lab
+
+The [browser playground](playground) demonstrates a crash and recovery with step playback,
+checkpoint inspection, attempt history, journal filtering, and sample JSON exports.
+It runs entirely in the browser with synthetic data; the real Python engine runs locally.
+
 ## Development
 
 ```bash
