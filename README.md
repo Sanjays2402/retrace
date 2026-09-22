@@ -17,6 +17,9 @@ process restart.
 
 ![The Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
 
+**New here?** [Five-minute recovery walkthrough](docs/getting-started.md) ·
+[Real CSV and HTTP examples](docs/examples.md) · [Is Retrace a fit?](docs/choosing-retrace.md)
+
 ## Try it in a minute
 
 Requires **Python 3.11+**. Install from the repository; this project is not yet published to PyPI.
@@ -168,7 +171,7 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **50 tests**, 25 reproducible generated DAGs, transactional rollback
+The Python suite includes **53 tests**, 25 reproducible generated DAGs, transactional rollback
 injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.

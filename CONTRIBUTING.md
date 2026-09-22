@@ -64,3 +64,11 @@ Bug reports should include Python/OS versions, a minimal workflow, and sanitized
 See [the roadmap](docs/roadmap.md) for starter tasks and larger design topics. If proposing a large
 feature, open an issue describing the user problem and failure semantics before implementing it.
 Treat other contributors with respect, focus review on the code, and assume good intent.
+
+## First contributions
+
+Pick a [good first issue](https://github.com/Sanjays2402/retrace/labels/good%20first%20issue).
+Each includes a starting file and an acceptance criterion. Comment with your proposed
+approach before a large change; small documentation fixes can go directly to a pull request.
+The [getting-started guide](docs/getting-started.md) and [integration examples](docs/examples.md)
+are good places to learn the user experience before changing scheduler internals.

@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-09-17
+
+- Five-minute onboarding, tested CSV ingestion and idempotent HTTP delivery examples.
+- Prepared manual trusted PyPI publishing and contributor starter tasks.
 
 - Inspector permalinks preserve the selected run, step, and timeline view across reloads and browser history.
 - Missing run links display an explicit message while keeping other runs accessible.
