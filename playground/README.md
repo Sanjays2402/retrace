@@ -42,3 +42,21 @@ The Python engine and local inspector remain separate from this public demo.
 The site is exported as static files; server build intermediates are not deployed.
 The generated starter dependencies remain pinned in package-lock.json. Review
 package audits before reusing its server packages for server-backed features.
+
+## GitHub Pages
+
+The repository's `Deploy GitHub Pages` workflow tests and builds this app on
+changes to `playground/` in `main`, then publishes the static output. It can also
+be run manually from Actions. GitHub Pages must use the **GitHub Actions** source.
+
+The build reads `NEXT_PUBLIC_BASE_PATH` from GitHub Pages configuration so asset
+URLs work under the repository path. The default is an empty prefix for local
+and root-domain hosting. To reproduce the project-site build:
+
+```sh
+NEXT_PUBLIC_BASE_PATH=/retrace npm run build:pages
+```
+
+The dedicated Vite entry (`pages.tsx`) shares the recovery UI and model with the
+root-hosted demo. Pages output is `dist/pages`; the build verifies local assets
+exist beneath the configured URL prefix. This static site requires JavaScript.

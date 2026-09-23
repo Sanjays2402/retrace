@@ -146,7 +146,12 @@ export default function Home() {
     <main className="shell">
       <aside className="sidebar">
         <a className="brand" href={repo}>
-          <img src="/mark.svg" alt="" width="38" height="38" />
+          <img
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/mark.svg`}
+            alt=""
+            width="38"
+            height="38"
+          />
           retrace<span>α</span>
         </a>
         <div className="side-label">PLAYGROUND</div>

@@ -10,7 +10,8 @@
     "build": "vinext build",
     "test": "node --experimental-strip-types --test tests/recovery.test.mjs",
     "check": "tsc --noEmit",
-    "lint": "oxlint app lib components/ui/tabs.tsx"
+    "lint": "oxlint app lib components/ui/tabs.tsx",
+    "build:pages": "vite build --config vite.pages.config.ts && node scripts/check-pages.mjs"
   },
   "dependencies": {
     "react": "19.2.6",
