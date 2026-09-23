@@ -17,7 +17,7 @@ process restart.
 
 ![The Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
 
-**Try it now:** [Interactive recovery demo](https://retrace-recovery-demo.sanjay-24.chatgpt.site) — no install or account.
+**Try it now:** [Interactive recovery demo](https://sanjays2402.github.io/retrace/) — no install or account.
 
 **New here?** [Five-minute recovery walkthrough](docs/getting-started.md) ·
 [Real CSV and HTTP examples](docs/examples.md) · [Is Retrace a fit?](docs/choosing-retrace.md)
@@ -163,7 +163,7 @@ and [security guidance](SECURITY.md).
 
 ## Interactive recovery lab
 
-The [live browser playground](https://retrace-recovery-demo.sanjay-24.chatgpt.site) demonstrates a crash and recovery with step playback,
+The [live browser playground](https://sanjays2402.github.io/retrace/) demonstrates a crash and recovery with step playback,
 checkpoint inspection, attempt history, journal filtering, and sample JSON exports.
 It runs entirely in the browser with synthetic data; the real Python engine runs locally.
 [Explore the playground source and development guide](playground).
