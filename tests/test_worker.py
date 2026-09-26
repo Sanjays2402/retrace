@@ -21,22 +21,22 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
             tempfile.TemporaryDirectory() as directory,
             Store(Path(directory, "queue.db")) as store,
         ):
-                first = Workflow("first", (Task("identity", identity),))
-                other = Workflow("other", (Task("identity", identity),))
-                other_id = store.create(other, "untouched")
-                run_id = store.create(first, 42)
-                old = store.claim_next(first, 0.3)
-                self.assertEqual(old.run_id, run_id)
-                self.assertIsNone(store.claim_next(first, 0.3))
-                store.db.execute("UPDATE runs SET lease_until=0 WHERE id=?", (run_id,))
-                new = store.claim_next(first, 1)
-                self.assertEqual(new.epoch, 2)
-                with self.assertRaises(LeaseLost):
-                    store.heartbeat(old, 1)
-                self.assertEqual(store.run(other_id)["status"], "pending")
-                result = await Worker(store, first).engine._run_claimed(first, new)
-                self.assertEqual(result.outputs, {"identity": 42})
-                self.assertIsNone(store.claim_next(first, 1))
+            first = Workflow("first", (Task("identity", identity),))
+            other = Workflow("other", (Task("identity", identity),))
+            other_id = store.create(other, "untouched")
+            run_id = store.create(first, 42)
+            old = store.claim_next(first, 0.3)
+            self.assertEqual(old.run_id, run_id)
+            self.assertIsNone(store.claim_next(first, 0.3))
+            store.db.execute("UPDATE runs SET lease_until=0 WHERE id=?", (run_id,))
+            new = store.claim_next(first, 1)
+            self.assertEqual(new.epoch, 2)
+            with self.assertRaises(LeaseLost):
+                store.heartbeat(old, 1)
+            self.assertEqual(store.run(other_id)["status"], "pending")
+            result = await Worker(store, first).engine._run_claimed(first, new)
+            self.assertEqual(result.outputs, {"identity": 42})
+            self.assertIsNone(store.claim_next(first, 1))
 
     async def test_bounded_parallel_runs(self):
         active = peak = 0

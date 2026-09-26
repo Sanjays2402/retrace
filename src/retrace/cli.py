@@ -140,9 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     asyncio.run(
                         dispatcher.serve(
-                            on_result=lambda result: print(
-                                json.dumps(asdict(result)), flush=True
-                            )
+                            on_result=lambda result: print(json.dumps(asdict(result)), flush=True)
                         )
                     )
             else:
