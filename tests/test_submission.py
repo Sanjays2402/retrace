@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from retrace import Store, Task, Workflow
@@ -72,7 +73,7 @@ class SubmissionTests(unittest.TestCase):
                 store.create(self.workflow, run_id="")
 
     def test_version_one_database_migrates_without_losing_runs(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.executescript(_SCHEMA)
             db.execute("PRAGMA user_version=1")
             db.execute(
