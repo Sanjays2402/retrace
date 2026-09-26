@@ -32,6 +32,8 @@ python3 -m http.server 3000 --bind 127.0.0.1 --directory dist/client
 - Inspect successful checkpoints and the interrupted/retried attempt history.
 - Filter the event journal to a selected step.
 - Preview, copy, or download a synthetic JSON snapshot. Uncommitted outputs are null.
+- Follow a worker handoff diagram and see how idempotent submission and delayed dispatch fit
+  into the local queue. These explanations are illustrative; the browser does not enqueue runs.
 - Optional WebMCP control uses the same validated model. Visible controls work
   without that API.
 

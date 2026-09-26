@@ -81,6 +81,36 @@ class CLITests(unittest.TestCase):
             self.invoke("worker", "examples.pipeline:workflow", "--max-runs", "0")[0], 2
         )
 
+    def test_idempotent_delayed_submit(self):
+        args = (
+            "submit",
+            "examples.pipeline:workflow",
+            "--input",
+            '{"values":[2,4]}',
+            "--key",
+            "daily-42",
+            "--delay",
+            "60",
+        )
+        code, out, err = self.invoke(*args)
+        self.assertEqual(code, 0, err)
+        first = json.loads(out)
+        self.assertEqual(first["status"], "pending")
+        self.assertEqual(self.invoke("worker", "examples.pipeline:workflow", "--once")[1], "[]\n")
+        self.assertEqual(json.loads(self.invoke(*args)[1]), first)
+        self.assertEqual(
+            self.invoke("submit", "examples.pipeline:workflow", "--key", "daily-42")[0], 2
+        )
+        for invalid in ("-1", "nan", "inf"):
+            self.assertEqual(
+                self.invoke("submit", "examples.pipeline:workflow", "--delay", invalid)[0], 2
+            )
+        with Store(self.db) as store:
+            store.db.execute("UPDATE runs SET ready_at=0 WHERE id=?", (first["run_id"],))
+        code, out, err = self.invoke("worker", "examples.pipeline:workflow", "--once")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)[0]["run_id"], first["run_id"])
+
     def test_invalid_input_definition_and_unknown_run(self):
         for args in (
             ("run", "bad"),

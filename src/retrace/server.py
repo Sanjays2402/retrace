@@ -80,6 +80,7 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
                         run = store.run(run_id)
                         if len(parts) == 3:
                             run.pop("owner", None)
+                            run.pop("submission_key_hash", None)
                             self.send_json(
                                 200,
                                 {

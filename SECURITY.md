@@ -1,6 +1,6 @@
 # Security
 
-Retrace v0.2 is an early-alpha local development tool for trusted Python workflows.
+Retrace is an early-alpha local development tool for trusted Python workflows.
 
 - Workflow modules execute arbitrary Python in the worker's process. Do not import definitions
   from untrusted sources. Retrace is not a sandbox.
@@ -13,6 +13,8 @@ Retrace v0.2 is an early-alpha local development tool for trusted Python workflo
   Retrace does not encrypt databases or manage encryption keys.
 - Stable idempotency keys help downstream deduplication; they are identifiers, not secrets or
   authentication credentials. Fencing covers database writes, not effects in remote systems.
+- Submission keys are stored as SHA-256 hashes to avoid saving raw identifiers. Short or
+  predictable keys can still be guessed; do not use secrets as submission keys.
 
 For a vulnerability, use GitHub's private vulnerability reporting if enabled for this repository.
 Otherwise contact the maintainer through the contact method on their GitHub profile before posting

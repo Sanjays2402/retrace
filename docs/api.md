@@ -101,6 +101,14 @@ must use separate `Store` connections to the same local SQLite file. `Store.clai
 the queue selection and fenced lease assignment one transaction. A crash can still repeat an
 external side effect before its checkpoint; use `Context.idempotency_key` downstream.
 
+`Store.create(workflow, input, key="order-42", ready_at=timestamp)` supports retries by
+producers and delayed dispatch. A key is unique across the database, limited to 128 characters,
+and stored as a SHA-256 hash. Repeating it with the same workflow fingerprint and canonical JSON
+input returns the original run ID without creating new tasks or events; changing either raises
+`ValueError`. The first submission's `ready_at` wins. Workers ignore pending runs before that
+Unix timestamp. Explicit `Engine.resume` may claim one early, and claiming consumes the delay.
+This is **submission** deduplication; it does not make task side effects exactly once.
+
 ## Explicit retry and preview
 
 ```python
@@ -131,6 +139,7 @@ Global flags go **before** the subcommand:
 ```bash
 retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{"count":128}'
 retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}'
+retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}' --key job-42 --delay 60
 retrace --db jobs.db worker my_pipeline:workflow --max-runs 2
 retrace --db jobs.db worker my_pipeline:workflow --once
 retrace --db jobs.db resume my_pipeline:workflow <RUN_ID>
@@ -153,7 +162,9 @@ monotonic across the database and may have gaps within a run.
 Exit codes: `0` success, `1` terminal workflow failure, `2` invalid input/definition or an
 infrastructure error, `130` graceful keyboard interruption. `demo --crash` intentionally exits
 with `86`. Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
-`submit` returns a JSON object with the pending run ID. `worker --once` prints a JSON array of
+`submit` returns a JSON object with the run ID, current status, and eligibility timestamp.
+`--delay` is a nonnegative number of seconds; `--key` provides idempotency within the database.
+`worker --once` prints a JSON array of
 completed runs; a continuous worker emits one JSON object per completed run. Individual task
 failures appear in each result and do not stop the worker process.
 

@@ -6,8 +6,10 @@ import argparse
 import asyncio
 import importlib
 import json
+import math
 import sqlite3
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -43,6 +45,13 @@ def parser() -> argparse.ArgumentParser:
     submit = commands.add_parser("submit", help="enqueue a workflow run for local workers")
     submit.add_argument("workflow")
     submit.add_argument("--input", default="null", help="JSON input")
+    submit.add_argument("--key", help="idempotent submission key, unique within this database")
+    submit.add_argument(
+        "--delay",
+        type=float,
+        default=0,
+        help="wait this many seconds before a worker claims the run",
+    )
     worker = commands.add_parser("worker", help="claim and execute queued runs on this machine")
     worker.add_argument("workflow")
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
@@ -120,8 +129,20 @@ def main(argv: list[str] | None = None) -> int:
                     cursor = page[-1]["id"]
             elif args.command == "submit":
                 workflow = load_workflow(args.workflow)
-                run_id = store.create(workflow, json.loads(args.input))
-                print(json.dumps({"run_id": run_id, "status": "pending"}))
+                if not math.isfinite(args.delay) or args.delay < 0:
+                    raise ValueError("delay must be finite and nonnegative")
+                run_id = store.create(
+                    workflow,
+                    json.loads(args.input),
+                    key=args.key,
+                    ready_at=time.time() + args.delay,
+                )
+                run = store.run(run_id)
+                print(
+                    json.dumps(
+                        {"run_id": run_id, "status": run["status"], "ready_at": run["ready_at"]}
+                    )
+                )
             elif args.command == "worker":
                 from retrace.worker import Worker
 

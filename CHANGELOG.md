@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — 2026-09-26
+
+- Add idempotent submission keys: concurrent producers resolve to one durable run, while
+  conflicting workflow definitions or inputs fail explicitly.
+- Add delayed dispatch with persisted eligibility timestamps and manual-resume override.
+- Migrate v1 SQLite databases to v2 in a transaction, preserving runs and checkpoints.
+- Document the new queue contract and surface it in the public playground.
+
+## 0.4.0 — 2026-09-25
+
+- Add a local multi-process worker pool with atomic queue claims, bounded parallel runs,
+  expired-lease takeover, and stale-worker fencing.
+- Add process-level contention tests and a worker ownership view in the playground.
+
 ## 0.3.0 — 2026-09-17
 
 - Five-minute onboarding, tested CSV ingestion and idempotent HTTP delivery examples.

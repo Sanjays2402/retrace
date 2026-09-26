@@ -42,6 +42,13 @@ local SQLite table, not a network broker. Each worker uses its own SQLite connec
 same machine and local disk. Worker processes require access to the same workflow code; a
 fingerprint mismatch leaves the run untouched.
 
+Submission keys and delayed eligibility are persisted on each run. Under `BEGIN IMMEDIATE`,
+`Store.create` checks a unique key hash before inserting. A matching workflow and input returns
+the original ID; a conflicting request fails. The first request fixes the schedule. Pending runs
+with `ready_at` in the future are skipped by the dispatcher; paused and expired runs remain
+eligible. A direct `resume` deliberately overrides the delay. Claiming clears `ready_at` so
+subsequent retry or recovery is not delayed again.
+
 SQLite serializes writers; the lease covers a whole run. Several tasks of that run execute
 concurrently in its owning event loop. Separate processes may own separate runs. Short,
 synchronous SQLite transactions execute on the event-loop thread. A contended or slow disk can
@@ -92,8 +99,8 @@ is then claimed normally with a new epoch. If the process exits between reset an
 a second request sees the pending/running state and cannot reset the same failure again.
 
 `Store.retry_plan` uses a read-only transaction for a consistent preview. It is a snapshot, not a
-reservation: applying retry revalidates the current state inside the write transaction. No schema
-change is needed; version-1 databases remain compatible. See [the recovery guide](recovery.md).
+reservation: applying retry revalidates the current state inside the write transaction. Retry
+requires no additional schema change. See [the recovery guide](recovery.md).
 
 `RetryPolicy.max_attempts` is the budget for **failed** attempts. A task with `max_attempts=3`
 may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
@@ -158,8 +165,10 @@ and exposes no mutation endpoints. It has no authentication and is not an intern
 
 `runs` stores definition, input, lease, and overall state; `tasks` stores the latest checkpoint;
 `attempts` preserves execution history; `events` is the ordered audit log. Foreign keys are enabled.
-`PRAGMA user_version=1` marks the schema; unknown future versions are refused. There is no migration
-framework yet, so back up databases before upgrading alpha versions.
+`PRAGMA user_version=2` marks the schema; unknown future versions are refused. Opening a v1
+database for writing adds the submission-key hash and eligibility columns in a transaction,
+preserving existing runs and checkpoints. Read-only connections do not migrate. Back up
+databases before upgrading alpha versions; a general migration framework is still future work.
 
 The scheduler scans persisted task state and currently loads task snapshots when starting work.
 It favors transparency over high-throughput scheduling and is intended for modest DAGs with
@@ -176,6 +185,8 @@ to measure your own disk/workload rather than assuming a throughput guarantee.
 - `tests/test_cli.py`: command exit codes, JSON output, event export, demo, and invalid inputs.
 - `tests/test_worker.py`: competing process claims, expired-lease takeover, definition matching,
   stale-owner fencing, and bounded parallel runs.
+- `tests/test_submission.py`: competing producer deduplication, delayed eligibility,
+  conflicting requests, and v1-to-v2 migration.
 - `tests/test_server.py`: coherent snapshots, event cursors, read-only routes, Host/Origin checks,
   static assets, and traversal rejection.
 - `scripts/smoke_wheel.py`: install the wheel in a new virtual environment and run from outside

@@ -19,6 +19,7 @@ import {
   CircleStop,
   Server,
   LockKeyhole,
+  Clock3,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { snapshot, nextPhase } from "@/lib/recovery";
@@ -534,6 +535,16 @@ export default function Home() {
               <span className="ownership-label">PROCESS 02</span>
               <strong>{phase >= 5 ? "Recovered owner" : "Waiting to claim"}</strong>
               <small>epoch 02 · {phase >= 5 ? "active" : "standby"}</small>
+            </div>
+          </div>
+          <div className="queue-features">
+            <div>
+              <ShieldCheck size={18} />
+              <span><strong>Retry-safe submission</strong><small>The same key and input resolve to one run ID, even when producers race.</small></span>
+            </div>
+            <div>
+              <Clock3 size={18} />
+              <span><strong>Dispatch on schedule</strong><small>Queue now; let a worker claim the run after its delay expires.</small></span>
             </div>
           </div>
           <div className="ownership-foot">

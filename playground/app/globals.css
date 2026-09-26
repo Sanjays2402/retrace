@@ -754,6 +754,12 @@ pre {
 .ownership-card.ledger small { color: #a8c49d; }
 .ownership-link { flex: 0 1 56px; height: 1px; background: #9fb995; position: relative; }
 .ownership-link span { position: absolute; right: -1px; top: -3px; width: 7px; height: 7px; border-top: 1px solid #6d9c69; border-right: 1px solid #6d9c69; transform: rotate(45deg); }
+.queue-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 19px; }
+.queue-features > div { display: flex; align-items: flex-start; gap: 12px; padding: 15px; background: #fff; border: 1px solid #dce5d7; border-radius: 6px; }
+.queue-features svg { color: #4d7956; }
+.queue-features span { display: flex; flex-direction: column; gap: 5px; }
+.queue-features strong { font-size: 12px; }
+.queue-features small { font-size: 11px; line-height: 1.5; color: #71816f; }
 .ownership-foot { display: flex; align-items: center; gap: 9px; color: #6b806a; font-size: 11px; line-height: 1.5; }
 .install {
   display: grid;
@@ -912,6 +918,7 @@ footer a {
   .ownership-map { flex-direction: column; align-items: stretch; }
   .ownership-link { flex: 0 0 20px; width: 1px; margin-left: 25px; }
   .ownership-link span { right: -3px; top: auto; bottom: 0; transform: rotate(135deg); }
+  .queue-features { grid-template-columns: 1fr; }
   .content {
     padding: 0 16px;
   }

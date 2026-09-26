@@ -6,7 +6,9 @@ ownership changes across processes; an epoch fences a previous owner out.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import sqlite3
 import time
 import uuid
@@ -86,22 +88,53 @@ class Store:
 
     def __init__(self, path: str | Path = "retrace.db", *, readonly: bool = False):
         self.path = str(path)
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                self._open(readonly)
+                return
+            except sqlite3.OperationalError as exc:
+                if hasattr(self, "db"):
+                    self.db.close()
+                if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
+
+    def _open(self, readonly: bool) -> None:
         if readonly:
-            uri = Path(path).resolve().as_uri() + "?mode=ro"
+            uri = Path(self.path).resolve().as_uri() + "?mode=ro"
             self.db = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=5)
         else:
             self.db = sqlite3.connect(self.path, isolation_level=None, timeout=5)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             self.db.close()
             raise ValueError(f"unsupported database schema version: {version}")
         if not readonly:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=FULL")
-            self.db.executescript(_SCHEMA)
-            self.db.execute("PRAGMA user_version=1")
+            if version == 0:
+                self.db.executescript(_SCHEMA)
+            if version < 2:
+                with self.transaction():
+                    columns = {row["name"] for row in self.db.execute("PRAGMA table_info(runs)")}
+                    if "submission_key_hash" not in columns:
+                        self.db.execute("ALTER TABLE runs ADD COLUMN submission_key_hash TEXT")
+                    if "ready_at" not in columns:
+                        self.db.execute(
+                            "ALTER TABLE runs ADD COLUMN ready_at REAL NOT NULL DEFAULT 0"
+                        )
+                    self.db.execute(
+                        """CREATE UNIQUE INDEX IF NOT EXISTS runs_submission_key
+                        ON runs(submission_key_hash)"""
+                    )
+                    self.db.execute(
+                        """CREATE INDEX IF NOT EXISTS runs_dispatch
+                        ON runs(fingerprint,status,ready_at,created_at)"""
+                    )
+                    self.db.execute("PRAGMA user_version=2")
 
     def close(self) -> None:
         self.db.close()
@@ -128,16 +161,53 @@ class Store:
             (run_id, task, kind, time.time(), encode(payload)),
         )
 
-    def create(self, workflow: Workflow, input: Any = None, *, run_id: str | None = None) -> str:
-        run_id = run_id or uuid.uuid4().hex
+    def create(
+        self,
+        workflow: Workflow,
+        input: Any = None,
+        *,
+        run_id: str | None = None,
+        key: str | None = None,
+        ready_at: float | None = None,
+    ) -> str:
+        """Persist a run; a matching key returns its original ID without changing it.
+
+        ``ready_at`` is a Unix timestamp for worker dispatch only. Direct resume
+        may claim the run before then. The first submission fixes the schedule.
+        """
+        caller_run_id = run_id
+        run_id = uuid.uuid4().hex if run_id is None else run_id
         if not run_id or len(run_id) > 128:
             raise ValueError("run_id must contain 1–128 characters")
+        if key is not None and (not isinstance(key, str) or not key or len(key) > 128):
+            raise ValueError("key must contain 1–128 characters")
         data = encode(input)
         now = time.time()
+        ready_at = now if ready_at is None else ready_at
+        if (
+            isinstance(ready_at, bool)
+            or not isinstance(ready_at, (int, float))
+            or not math.isfinite(ready_at)
+            or ready_at < 0
+        ):
+            raise ValueError("ready_at must be a finite nonnegative timestamp")
+        key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest() if key is not None else None
         with self.transaction():
+            if key_hash is not None:
+                existing = self.db.execute(
+                    "SELECT id,fingerprint,input FROM runs WHERE submission_key_hash=?",
+                    (key_hash,),
+                ).fetchone()
+                if existing is not None:
+                    if existing["fingerprint"] != workflow.fingerprint or existing["input"] != data:
+                        raise ValueError("submission key is already used for different work")
+                    if caller_run_id is not None and existing["id"] != caller_run_id:
+                        raise ValueError("submission key already belongs to another run ID")
+                    return existing["id"]
             self.db.execute(
                 """INSERT INTO runs(id,name,version,fingerprint,manifest,input,status,
-                created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)""",
+                created_at,updated_at,submission_key_hash,ready_at)
+                VALUES(?,?,?,?,?,?,'pending',?,?,?,?)""",
                 (
                     run_id,
                     workflow.name,
@@ -147,13 +217,15 @@ class Store:
                     data,
                     now,
                     now,
+                    key_hash,
+                    ready_at,
                 ),
             )
             self.db.executemany(
                 "INSERT INTO tasks(run_id,name) VALUES(?,?)",
                 [(run_id, task.name) for task in workflow.tasks],
             )
-            self._event(run_id, "run.created")
+            self._event(run_id, "run.created", ready_at=ready_at)
         return run_id
 
     def run(self, run_id: str) -> dict[str, Any]:
@@ -292,8 +364,9 @@ class Store:
             now = time.time()
             query = """SELECT id FROM runs WHERE fingerprint=?
                 AND status IN ('pending','paused','running')
-                AND (owner IS NULL OR lease_until<=?)"""
-            parameters: list[Any] = [workflow.fingerprint, now]
+                AND (owner IS NULL OR lease_until<=?)
+                AND (status!='pending' OR ready_at<=?)"""
+            parameters: list[Any] = [workflow.fingerprint, now, now]
             if excluded:
                 query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
                 parameters.extend(excluded)
@@ -314,7 +387,8 @@ class Store:
             raise RunBusy(f"run {run_id} has a live worker until {run['lease_until']:.3f}")
         lease = Lease(run_id, uuid.uuid4().hex, run["epoch"] + 1)
         self.db.execute(
-            """UPDATE runs SET status='running',owner=?,epoch=?,lease_until=?,updated_at=?
+            """UPDATE runs SET status='running',owner=?,epoch=?,lease_until=?,updated_at=?,
+            ready_at=0
             WHERE id=?""",
             (lease.owner, lease.epoch, now + ttl, now, run_id),
         )

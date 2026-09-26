@@ -68,6 +68,19 @@ retrace --db jobs.db worker examples.pipeline:workflow --max-runs 2
 # For batch jobs or scripts, add --once to drain the available queue and exit.
 ```
 
+If producers retry requests after a timeout, use a submission key to prevent duplicate runs.
+You can also delay a run without keeping a producer process alive:
+
+```bash
+retrace --db jobs.db submit examples.pipeline:workflow \
+  --input '{"values":[3,7,11]}' --key orders-2026-09-26 --delay 60
+```
+
+The first submission owns that key and schedule. Repeating the same key and input returns the
+same run ID, even after completion; using the key for different work fails. A worker claims the
+run only after the delay. Keys are unique per database and stored as SHA-256 hashes. Back up
+your SQLite file before upgrading: opening an older database for writing migrates its schema.
+
 Workers only claim runs matching their workflow fingerprint. The journal records each new
 ownership epoch, and a stale worker cannot commit after takeover. `--max-runs` limits parallel
 runs per process; global `--concurrency` limits ready tasks **within each run**. This is a
@@ -146,6 +159,7 @@ asyncio.run(main())
 | Durable checkpoints | SQLite WAL, `synchronous=FULL`; state and event commit together |
 | Crash recovery | Expired run leases are reclaimed; successful steps are reused |
 | Local worker pool | Transactional queue claims across processes, bounded runs per worker, automatic expired-lease recovery |
+| Producer-safe submission | Idempotent keys and delayed dispatch survive process restarts |
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
@@ -200,10 +214,10 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes process-level queue contention and takeover tests, 25 reproducible generated DAGs, transactional rollback
-injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
-HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
-3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.
+The Python suite includes **65 tests**, process-level producer and worker contention, 25
+reproducible generated DAGs, transactional rollback injection, stale-worker fencing, persistent
+retry deadlines, HTTP security checks, and a real process-kill/restart test. Local Python 3.12
+verification reports **96% combined statement/branch coverage** and **100% for the scheduler**.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
 Fourteen Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.

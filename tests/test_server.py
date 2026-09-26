@@ -59,6 +59,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         data = json.loads(body)
         self.assertNotIn("owner", data["run"])
+        self.assertNotIn("submission_key_hash", data["run"])
         self.assertEqual(data["tasks"]["step"]["output"]["value"], "<script>alert(1)</script>")
         status, _, body = self.request(f"/api/runs/{self.run_id}/events")
         page = json.loads(body)
