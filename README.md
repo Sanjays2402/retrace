@@ -55,6 +55,25 @@ attempt stays visible in the timeline; a new worker completes the run. The integ
 also kills a real child process without cleanup, resumes it in a different process, verifies
 that a completed step ran once, and checks SQLite integrity.
 
+## Queue runs across local worker processes
+
+Submit runs without starting them, then run one or more workers against the same **local**
+SQLite file. Each process loads the same workflow definition and atomically claims an eligible
+run. A crashed worker's run becomes eligible after its lease expires.
+
+```bash
+retrace --db jobs.db submit examples.pipeline:workflow --input '{"values":[3,7,11]}'
+retrace --db jobs.db worker examples.pipeline:workflow --max-runs 2
+# In another terminal, start another worker with the same command.
+# For batch jobs or scripts, add --once to drain the available queue and exit.
+```
+
+Workers only claim runs matching their workflow fingerprint. The journal records each new
+ownership epoch, and a stale worker cannot commit after takeover. `--max-runs` limits parallel
+runs per process; global `--concurrency` limits ready tasks **within each run**. This is a
+single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
+pass `ctx.idempotency_key` to systems that support deduplication.
+
 ## Recover a failed branch
 
 Fix the external cause of a failure, then preview and retry only the affected work:
@@ -126,6 +145,7 @@ asyncio.run(main())
 | --- | --- |
 | Durable checkpoints | SQLite WAL, `synchronous=FULL`; state and event commit together |
 | Crash recovery | Expired run leases are reclaimed; successful steps are reused |
+| Local worker pool | Transactional queue claims across processes, bounded runs per worker, automatic expired-lease recovery |
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
@@ -141,9 +161,9 @@ asyncio.run(main())
 - **Task execution is at least once.** A crash can happen after an external API accepts a request
   and before its result is committed. Use `ctx.idempotency_key` with downstream systems that
   support deduplication. Worker fencing protects Retrace's database, not external side effects.
-- **One worker owns a run; its ready tasks execute concurrently.** Different runs may use
-  different worker processes against the same local SQLite file. There is no distributed
-  task queue or automatic worker daemon.
+- **One worker owns a run; its ready tasks execute concurrently.** Several local processes
+  can poll and claim different runs from the same SQLite file. The queue is polled, and
+  workers must load the matching workflow definition.
 - **Completed outputs are immutable checkpoints.** Retrace resumes from them; it does not
   replay successful functions. After fixing an external failure, explicitly retry failed steps
   with `retrace retry`. Use `--dry-run` to preview the affected steps; `resume` never resets failures.
@@ -180,7 +200,7 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **53 tests**, 25 reproducible generated DAGs, transactional rollback
+The Python suite includes process-level queue contention and takeover tests, 25 reproducible generated DAGs, transactional rollback
 injection, live-lease exclusion, stale-worker fencing, persistent retry deadlines, CLI behavior,
 HTTP security checks, and a real process-kill/restart test. Initial local verification on Python
 3.12 reports **97% combined statement/branch coverage** and **100% for the scheduler**.

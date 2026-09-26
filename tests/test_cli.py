@@ -59,6 +59,28 @@ class CLITests(unittest.TestCase):
         self.assertEqual(len(full), 3)
         self.assertEqual(limited, full[:2])
 
+    def test_submit_and_worker_once(self):
+        code, out, err = self.invoke(
+            "submit", "examples.pipeline:workflow", "--input", '{"values":[2,4]}'
+        )
+        self.assertEqual(code, 0, err)
+        queued = json.loads(out)
+        self.assertEqual(queued["status"], "pending")
+        with Store(self.db) as store:
+            self.assertEqual(store.run(queued["run_id"])["status"], "pending")
+        code, out, err = self.invoke(
+            "worker", "examples.pipeline:workflow", "--once", "--max-runs", "2"
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)[0]["run_id"], queued["run_id"])
+        self.assertEqual(json.loads(out)[0]["outputs"]["summarize"]["mean"], 3)
+        self.assertEqual(
+            json.loads(self.invoke("worker", "examples.pipeline:workflow", "--once")[1]), []
+        )
+        self.assertEqual(
+            self.invoke("worker", "examples.pipeline:workflow", "--max-runs", "0")[0], 2
+        )
+
     def test_invalid_input_definition_and_unknown_run(self):
         for args in (
             ("run", "bad"),

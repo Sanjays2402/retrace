@@ -40,6 +40,14 @@ def parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="execute a trusted MODULE:ATTRIBUTE workflow")
     run.add_argument("workflow")
     run.add_argument("--input", default="null", help="JSON input")
+    submit = commands.add_parser("submit", help="enqueue a workflow run for local workers")
+    submit.add_argument("workflow")
+    submit.add_argument("--input", default="null", help="JSON input")
+    worker = commands.add_parser("worker", help="claim and execute queued runs on this machine")
+    worker.add_argument("workflow")
+    worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
+    worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
+    worker.add_argument("--once", action="store_true", help="drain available runs and exit")
     resume = commands.add_parser("resume", help="resume an interrupted run")
     resume.add_argument("workflow")
     resume.add_argument("run_id")
@@ -110,6 +118,33 @@ def main(argv: list[str] | None = None) -> int:
                     for event in page:
                         print(json.dumps(event))
                     cursor = page[-1]["id"]
+            elif args.command == "submit":
+                workflow = load_workflow(args.workflow)
+                run_id = store.create(workflow, json.loads(args.input))
+                print(json.dumps({"run_id": run_id, "status": "pending"}))
+            elif args.command == "worker":
+                from retrace.worker import Worker
+
+                workflow = load_workflow(args.workflow)
+                dispatcher = Worker(
+                    store,
+                    workflow,
+                    max_runs=args.max_runs,
+                    concurrency=args.concurrency,
+                    lease_ttl=args.lease_ttl,
+                    poll_interval=args.poll_interval,
+                )
+                if args.once:
+                    results = asyncio.run(dispatcher.serve(once=True))
+                    print(json.dumps([asdict(result) for result in results]))
+                else:
+                    asyncio.run(
+                        dispatcher.serve(
+                            on_result=lambda result: print(
+                                json.dumps(asdict(result)), flush=True
+                            )
+                        )
+                    )
             else:
                 spec = "retrace.demo:workflow" if args.command == "demo" else args.workflow
                 workflow = load_workflow(spec)

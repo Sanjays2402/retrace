@@ -691,6 +691,70 @@ pre {
   padding: 4px 6px;
   flex-shrink: 0;
 }
+.ownership {
+  margin-top: 39px;
+  padding: 27px;
+  border: 1px solid #d6dfd3;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fbf4, #eef4e9);
+}
+.ownership-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+.ownership-head h2 {
+  font: 29px/1.12 Georgia, serif;
+  letter-spacing: -0.8px;
+  margin: 0 0 11px;
+}
+.ownership-head p:not(.eyebrow) {
+  max-width: 610px;
+  color: #68776f;
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+}
+.ownership-head a {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+  color: #315f45;
+  font-size: 12px;
+}
+.ownership-map {
+  display: flex;
+  align-items: center;
+  margin: 25px 0 19px;
+}
+.ownership-card {
+  min-width: 0;
+  flex: 1;
+  padding: 18px;
+  border: 1px solid #d9e3d4;
+  border-radius: 7px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 3px 11px #1c392408;
+}
+.ownership-card.owns { border-color: #8dad81; background: #f5faef; }
+.ownership-card.lost { border-color: #d2ab86; background: #fff8f1; }
+.ownership-card.fenced { opacity: .65; }
+.ownership-card.ledger { background: #1d3a2d; color: #e7f4d9; border-color: #1d3a2d; }
+.ownership-icon { color: #517553; }
+.ownership-card.ledger .ownership-icon { color: #b9db9b; }
+.ownership-label { font: 10px var(--mono); letter-spacing: .11em; color: #7c9078; }
+.ownership-card.ledger .ownership-label { color: #a7c79b; }
+.ownership-card strong { font-size: 15px; letter-spacing: -.2px; }
+.ownership-card small { font: 11px var(--mono); color: #83917f; }
+.ownership-card.ledger small { color: #a8c49d; }
+.ownership-link { flex: 0 1 56px; height: 1px; background: #9fb995; position: relative; }
+.ownership-link span { position: absolute; right: -1px; top: -3px; width: 7px; height: 7px; border-top: 1px solid #6d9c69; border-right: 1px solid #6d9c69; transform: rotate(45deg); }
+.ownership-foot { display: flex; align-items: center; gap: 9px; color: #6b806a; font-size: 11px; line-height: 1.5; }
 .install {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -842,6 +906,12 @@ footer a {
   }
 }
 @media (max-width: 600px) {
+  .ownership { padding: 22px 17px; }
+  .ownership-head { flex-direction: column; gap: 15px; }
+  .ownership-head h2 { font-size: 25px; }
+  .ownership-map { flex-direction: column; align-items: stretch; }
+  .ownership-link { flex: 0 0 20px; width: 1px; margin-left: 25px; }
+  .ownership-link span { right: -3px; top: auto; bottom: 0; transform: rotate(135deg); }
   .content {
     padding: 0 16px;
   }

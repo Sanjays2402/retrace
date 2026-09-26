@@ -17,6 +17,8 @@ import {
   Download,
   Copy,
   CircleStop,
+  Server,
+  LockKeyhole,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { snapshot, nextPhase } from "@/lib/recovery";
@@ -497,6 +499,48 @@ export default function Home() {
           browser. No Python runs, file uploads, or persisted data. Autoplay
           pauses at the crash so you can inspect the checkpoints.
         </p>
+        <section className="ownership" aria-label="Worker ownership model">
+          <div className="ownership-head">
+            <div>
+              <p className="eyebrow">MULTI-PROCESS EXECUTION</p>
+              <h2>One run. One owner. A recoverable handoff.</h2>
+              <p>
+                Local worker processes compete for queued runs through one SQLite
+                transaction. Each claimed run has an epoch; a previous owner
+                cannot commit after takeover.
+              </p>
+            </div>
+            <a href={`${repo}/blob/main/docs/architecture.md`}>
+              Read the protocol <ArrowUpRight size={15} />
+            </a>
+          </div>
+          <div className="ownership-map">
+            <div className={`ownership-card ${phase === 4 ? "lost" : phase >= 5 ? "fenced" : "owns"}`}>
+              <span className="ownership-icon"><Server size={19} /></span>
+              <span className="ownership-label">PROCESS 01</span>
+              <strong>{phase === 4 ? "Lease expired" : phase >= 5 ? "Fenced out" : "Original owner"}</strong>
+              <small>epoch 01 · {phase === 4 ? "crashed" : phase >= 5 ? "stale" : "active"}</small>
+            </div>
+            <div className="ownership-link" aria-hidden="true"><span /></div>
+            <div className="ownership-card ledger">
+              <span className="ownership-icon"><Database size={19} /></span>
+              <span className="ownership-label">LOCAL SQLITE WAL</span>
+              <strong>{run.completed} / 4 checkpoints</strong>
+              <small>atomic claim · durable journal</small>
+            </div>
+            <div className="ownership-link" aria-hidden="true"><span /></div>
+            <div className={`ownership-card ${phase >= 5 ? "owns" : "waiting"}`}>
+              <span className="ownership-icon"><Server size={19} /></span>
+              <span className="ownership-label">PROCESS 02</span>
+              <strong>{phase >= 5 ? "Recovered owner" : "Waiting to claim"}</strong>
+              <small>epoch 02 · {phase >= 5 ? "active" : "standby"}</small>
+            </div>
+          </div>
+          <div className="ownership-foot">
+            <LockKeyhole size={15} />
+            <span>Fencing protects Retrace checkpoints. External side effects still need idempotency keys.</span>
+          </div>
+        </section>
         <section id="install" className="install">
           <div>
             <p className="eyebrow">YOUR PIPELINE, NEXT</p>

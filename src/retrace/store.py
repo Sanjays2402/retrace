@@ -277,39 +277,64 @@ class Store:
 
     def claim(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
         with self.transaction():
-            run = self.run(run_id)
-            if run["fingerprint"] != workflow.fingerprint:
-                raise DefinitionMismatch(
-                    "workflow changed; restore the original definition or start a new run"
-                )
-            if run["status"] in ("succeeded", "failed"):
-                return None
+            return self._claim_locked(run_id, workflow, ttl)
+
+    def claim_next(
+        self, workflow: Workflow, ttl: float, *, exclude: Sequence[str] = ()
+    ) -> Lease | None:
+        """Atomically claim the oldest eligible run for this exact workflow definition.
+
+        The selection and ownership change share one write transaction, so competing
+        processes cannot both acquire a pending or expired run.
+        """
+        excluded = tuple(exclude)
+        with self.transaction():
             now = time.time()
-            if run["owner"] and run["lease_until"] > now:
-                raise RunBusy(f"run {run_id} has a live worker until {run['lease_until']:.3f}")
-            lease = Lease(run_id, uuid.uuid4().hex, run["epoch"] + 1)
-            self.db.execute(
-                """UPDATE runs SET status='running',owner=?,epoch=?,lease_until=?,updated_at=?
-                WHERE id=?""",
-                (lease.owner, lease.epoch, now + ttl, now, run_id),
+            query = """SELECT id FROM runs WHERE fingerprint=?
+                AND status IN ('pending','paused','running')
+                AND (owner IS NULL OR lease_until<=?)"""
+            parameters: list[Any] = [workflow.fingerprint, now]
+            if excluded:
+                query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
+                parameters.extend(excluded)
+            query += " ORDER BY created_at,id LIMIT 1"
+            row = self.db.execute(query, parameters).fetchone()
+            return None if row is None else self._claim_locked(row["id"], workflow, ttl)
+
+    def _claim_locked(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
+        run = self.run(run_id)
+        if run["fingerprint"] != workflow.fingerprint:
+            raise DefinitionMismatch(
+                "workflow changed; restore the original definition or start a new run"
             )
-            interrupted = self.db.execute(
-                "SELECT name FROM tasks WHERE run_id=? AND status='running'",
-                (run_id,),
-            ).fetchall()
-            for row in interrupted:
-                self._event(run_id, "task.interrupted", row["name"], reason="worker lease expired")
-            self.db.execute(
-                """UPDATE attempts SET status='interrupted',finished_at=?
-                WHERE run_id=? AND status='running'""",
-                (now, run_id),
-            )
-            self.db.execute(
-                "UPDATE tasks SET status='pending' WHERE run_id=? AND status='running'",
-                (run_id,),
-            )
-            self._event(run_id, "run.claimed", epoch=lease.epoch, recovered=len(interrupted))
-            return lease
+        if run["status"] in ("succeeded", "failed"):
+            return None
+        now = time.time()
+        if run["owner"] and run["lease_until"] > now:
+            raise RunBusy(f"run {run_id} has a live worker until {run['lease_until']:.3f}")
+        lease = Lease(run_id, uuid.uuid4().hex, run["epoch"] + 1)
+        self.db.execute(
+            """UPDATE runs SET status='running',owner=?,epoch=?,lease_until=?,updated_at=?
+            WHERE id=?""",
+            (lease.owner, lease.epoch, now + ttl, now, run_id),
+        )
+        interrupted = self.db.execute(
+            "SELECT name FROM tasks WHERE run_id=? AND status='running'",
+            (run_id,),
+        ).fetchall()
+        for row in interrupted:
+            self._event(run_id, "task.interrupted", row["name"], reason="worker lease expired")
+        self.db.execute(
+            """UPDATE attempts SET status='interrupted',finished_at=?
+            WHERE run_id=? AND status='running'""",
+            (now, run_id),
+        )
+        self.db.execute(
+            "UPDATE tasks SET status='pending' WHERE run_id=? AND status='running'",
+            (run_id,),
+        )
+        self._event(run_id, "run.claimed", epoch=lease.epoch, recovered=len(interrupted))
+        return lease
 
     def _fence(self, lease: Lease) -> None:
         row = self.db.execute(

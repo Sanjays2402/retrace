@@ -57,6 +57,11 @@ class Engine:
         lease = self.store.claim(run_id, workflow, self.lease_ttl)
         if lease is None:
             return self._result(run_id)
+        return await self._run_claimed(workflow, lease)
+
+    async def _run_claimed(self, workflow: Workflow, lease: Lease) -> RunResult:
+        """Execute a lease already acquired by a worker dispatcher."""
+        run_id = lease.run_id
         scheduler = asyncio.create_task(self._schedule(workflow, lease))
         heartbeat = asyncio.create_task(self._heartbeat(lease))
         try:

@@ -1,6 +1,6 @@
 # Roadmap
 
-This is a direction, not a delivery promise. v0.2 is focused on inspectable local durability.
+This is a direction, not a delivery promise. Retrace focuses on inspectable local durability.
 
 ## Implemented since v0.1
 
@@ -9,6 +9,8 @@ This is a direction, not a delivery promise. v0.2 is focused on inspectable loca
 
 - Graph zoom, responsive fit-to-view, and reset controls with keyboard access.
 - Chrome Trace JSON export with task lanes and preserved attempt history.
+- A local multi-process worker pool with atomic queue claims, bounded parallel runs, and
+  automatic recovery after a worker's lease expires.
 
 ## Small, well-scoped contributions
 

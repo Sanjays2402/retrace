@@ -79,6 +79,28 @@ at least 0.3 s. The minimum is intended for tests; the default gives real worklo
 Never call blocking code on the event loop. `asyncio.to_thread` can offload blocking work, but
 cancelling the awaiting coroutine does not forcibly stop the underlying thread or its effects.
 
+## Local worker pool
+
+`Store.create` can enqueue a run without immediately executing it. A `Worker` polls the store
+for pending, paused, or expired runs with the same workflow fingerprint:
+
+```python
+from retrace import Store, Worker
+
+with Store("jobs.db") as store:
+    run_id = store.create(workflow, {"count": 128})
+    # In a worker process using its own Store connection:
+    results = await Worker(store, workflow, max_runs=2).serve(once=True)
+```
+
+`Worker.serve(once=True)` returns completed `RunResult` values and exits when no eligible
+run remains. `serve(on_result=callback)` polls until cancelled and reports each completed run
+to the synchronous callback. `max_runs` bounds parallel runs in a process; `concurrency`
+bounds tasks in each run. `poll_interval` defaults to one second. Workers on the same machine
+must use separate `Store` connections to the same local SQLite file. `Store.claim_next` makes
+the queue selection and fenced lease assignment one transaction. A crash can still repeat an
+external side effect before its checkpoint; use `Context.idempotency_key` downstream.
+
 ## Explicit retry and preview
 
 ```python
@@ -108,6 +130,9 @@ Global flags go **before** the subcommand:
 
 ```bash
 retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{"count":128}'
+retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}'
+retrace --db jobs.db worker my_pipeline:workflow --max-runs 2
+retrace --db jobs.db worker my_pipeline:workflow --once
 retrace --db jobs.db resume my_pipeline:workflow <RUN_ID>
 retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch --dry-run
 retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch
@@ -128,6 +153,9 @@ monotonic across the database and may have gaps within a run.
 Exit codes: `0` success, `1` terminal workflow failure, `2` invalid input/definition or an
 infrastructure error, `130` graceful keyboard interruption. `demo --crash` intentionally exits
 with `86`. Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
+`submit` returns a JSON object with the pending run ID. `worker --once` prints a JSON array of
+completed runs; a continuous worker emits one JSON object per completed run. Individual task
+failures appear in each result and do not stop the worker process.
 
 ## Inspector API
 

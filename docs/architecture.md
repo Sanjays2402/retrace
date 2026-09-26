@@ -7,6 +7,8 @@ and observation separate so execution semantics can be tested without a browser 
 flowchart LR
     Definition[Versioned Workflow DAG] --> Engine[Async scheduler]
     CLI[CLI / Python API] --> Engine
+    Queue[Queued runs] --> Workers[Local worker processes]
+    Workers -->|atomic claim| Engine
     Engine --> Tasks[Concurrent async tasks]
     Tasks --> Checkpoint[JSON result boundary]
     Checkpoint --> Store[SQLite transaction]
@@ -22,13 +24,23 @@ flowchart LR
 ## Ownership protocol
 
 1. `Store.claim` enters `BEGIN IMMEDIATE`, checks the workflow fingerprint, and rejects a live owner.
+   `Store.claim_next` selects the oldest eligible run of an exact definition and assigns its
+   lease in the same transaction. Competing local worker processes cannot both claim it.
 2. It increments the run's epoch, assigns a random owner token, and sets an absolute lease deadline.
 3. Running attempts left by an expired owner become `interrupted`; their tasks return to `pending`.
 4. A heartbeat renews the lease every third of its configured TTL.
 5. Before **every** task-state write, heartbeat, or release, the transaction checks owner, epoch,
    and expiry. An old worker cannot commit after a takeover, even if it eventually returns a result.
-6. Loss of ownership aborts the scheduler and cancels its active coroutines. Recovery requires
-   a subsequent explicit `resume` call; there is no background dispatcher.
+6. Loss of ownership aborts the scheduler and cancels its active coroutines. A running worker
+   pool will poll and reclaim the run after lease expiry; without one, call `resume` explicitly.
+
+`retrace submit` persists a pending run, while `retrace worker` starts a polling process for one
+workflow definition. Each process may own multiple runs, bounded by `--max-runs`; the task
+concurrency limit applies separately inside each run. `--once` drains runs available to that
+worker and exits. It does not wait for another process's live lease to expire. The queue is a
+local SQLite table, not a network broker. Each worker uses its own SQLite connection on the
+same machine and local disk. Worker processes require access to the same workflow code; a
+fingerprint mismatch leaves the run untouched.
 
 SQLite serializes writers; the lease covers a whole run. Several tasks of that run execute
 concurrently in its owning event loop. Separate processes may own separate runs. Short,
@@ -162,6 +174,8 @@ to measure your own disk/workload rather than assuming a throughput guarantee.
 - `tests/test_recovery.py`: actual process kill and new-process recovery, database integrity,
   heartbeat loss, retry deadline persistence, and generated DAG reference comparisons.
 - `tests/test_cli.py`: command exit codes, JSON output, event export, demo, and invalid inputs.
+- `tests/test_worker.py`: competing process claims, expired-lease takeover, definition matching,
+  stale-owner fencing, and bounded parallel runs.
 - `tests/test_server.py`: coherent snapshots, event cursors, read-only routes, Host/Origin checks,
   static assets, and traversal rejection.
 - `scripts/smoke_wheel.py`: install the wheel in a new virtual environment and run from outside

@@ -2,6 +2,7 @@
 
 from retrace.engine import Engine, RunResult
 from retrace.store import DefinitionMismatch, LeaseLost, RetryPlan, RunBusy, Store
+from retrace.worker import Worker
 from retrace.workflow import Context, RetryPolicy, Task, Workflow
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "Store",
     "Task",
     "Workflow",
+    "Worker",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"
