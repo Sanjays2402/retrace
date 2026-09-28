@@ -40,18 +40,39 @@ class Worker:
         self.engine = Engine(store, concurrency=concurrency, lease_ttl=lease_ttl)
 
     async def serve(
-        self, *, once: bool = False, on_result: Callable[[RunResult], None] | None = None
+        self,
+        *,
+        once: bool = False,
+        on_result: Callable[[RunResult], None] | None = None,
+        stop_event: asyncio.Event | None = None,
+        drain_timeout: float = 30.0,
     ) -> list[RunResult]:
         """Process eligible runs, or keep polling until cancelled.
 
         ``once`` drains the currently available queue and waits for its claims
-        to finish. ``on_result`` is called after each run completes.
+        to finish. ``on_result`` is called after each run completes. Setting
+        ``stop_event`` stops new claims and gives owned runs ``drain_timeout``
+        seconds to finish before their coroutines are cancelled and paused.
         """
+        if (
+            isinstance(drain_timeout, bool)
+            or not isinstance(drain_timeout, (int, float))
+            or not math.isfinite(drain_timeout)
+            or drain_timeout < 0
+        ):
+            raise ValueError("drain_timeout must be finite and nonnegative")
         active: dict[str, asyncio.Task[RunResult]] = {}
         results: list[RunResult] = []
+        stop_waiter = asyncio.create_task(stop_event.wait()) if stop_event else None
+        drain_deadline: float | None = None
+        loop = asyncio.get_running_loop()
         try:
             while True:
-                while len(active) < self.max_runs:
+                if stop_event is not None and stop_event.is_set() and drain_deadline is None:
+                    drain_deadline = loop.time() + drain_timeout
+                while len(active) < self.max_runs and drain_deadline is None:
+                    if stop_event is not None and stop_event.is_set():
+                        break
                     lease = self.store.claim_next(
                         self.workflow, self.engine.lease_ttl, exclude=tuple(active)
                     )
@@ -61,12 +82,21 @@ class Worker:
                         self.engine._run_claimed(self.workflow, lease)
                     )
                 if not active:
-                    if once:
+                    if once or drain_deadline is not None:
                         return results
-                    await asyncio.sleep(self.poll_interval)
+                    if stop_waiter is None:
+                        await asyncio.sleep(self.poll_interval)
+                    else:
+                        await asyncio.wait((stop_waiter,), timeout=self.poll_interval)
                     continue
+                timeout = self.poll_interval
+                if drain_deadline is not None:
+                    timeout = min(timeout, max(0, drain_deadline - loop.time()))
+                waiters: set[asyncio.Task[RunResult] | asyncio.Task[bool]] = set(active.values())
+                if stop_waiter is not None and drain_deadline is None:
+                    waiters.add(stop_waiter)
                 done, _ = await asyncio.wait(
-                    active.values(), timeout=self.poll_interval, return_when=asyncio.FIRST_COMPLETED
+                    waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
                 )
                 for run_id, task in list(active.items()):
                     if task in done:
@@ -76,7 +106,15 @@ class Worker:
                             on_result(result)
                         if once:
                             results.append(result)
+                if drain_deadline is not None and loop.time() >= drain_deadline:
+                    return results
         finally:
+            if stop_waiter is not None:
+                stop_waiter.cancel()
             for task in active.values():
                 task.cancel()
-            await asyncio.gather(*active.values(), return_exceptions=True)
+            await asyncio.gather(
+                *active.values(),
+                *((stop_waiter,) if stop_waiter is not None else ()),
+                return_exceptions=True,
+            )

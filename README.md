@@ -87,6 +87,13 @@ runs per process; global `--concurrency` limits ready tasks **within each run**.
 single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
 pass `ctx.idempotency_key` to systems that support deduplication.
 
+For rolling worker restarts, send **SIGTERM** to a worker process. It stops claiming new runs,
+lets its current runs finish for up to 30 seconds, then pauses any still active work and
+releases its leases. Another worker can claim those paused runs immediately, without waiting
+for lease expiry. Set `--drain-timeout 10` to choose a different grace period; `0` pauses
+immediately. This is cooperative: a task that blocks the event loop or suppresses cancellation
+can delay shutdown. A hard kill still uses the normal expired-lease recovery path.
+
 ## Cancel a queued or running run
 
 ```bash
@@ -173,6 +180,7 @@ asyncio.run(main())
 | Durable checkpoints | SQLite WAL, `synchronous=FULL`; state and event commit together |
 | Crash recovery | Expired run leases are reclaimed; successful steps are reused |
 | Local worker pool | Transactional queue claims across processes, bounded runs per worker, automatic expired-lease recovery |
+| Graceful worker drain | SIGTERM stops claims, completes in-flight runs within a grace period, then pauses and releases unfinished work |
 | Producer-safe submission | Idempotent keys and delayed dispatch survive process restarts |
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
@@ -191,7 +199,8 @@ asyncio.run(main())
   support deduplication. Worker fencing protects Retrace's database, not external side effects.
 - **One worker owns a run; its ready tasks execute concurrently.** Several local processes
   can poll and claim different runs from the same SQLite file. The queue is polled, and
-  workers must load the matching workflow definition.
+  workers must load the matching workflow definition. Graceful drain supports local rolling
+  restarts; it does not turn the SQLite queue into a multi-host service.
 - **Completed outputs are immutable checkpoints.** Retrace resumes from them; it does not
   replay successful functions. After fixing an external failure, explicitly retry failed steps
   with `retrace retry`. Use `--dry-run` to preview the affected steps; `resume` never resets failures.
@@ -229,7 +238,7 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **65 tests**, process-level producer and worker contention, 25
+The Python suite includes **74 tests**, process-level producer and worker contention, 25
 reproducible generated DAGs, transactional rollback injection, stale-worker fencing, persistent
 retry deadlines, HTTP security checks, and a real process-kill/restart test. Local Python 3.12
 verification reports **96% combined statement/branch coverage** and **100% for the scheduler**.

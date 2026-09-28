@@ -101,6 +101,16 @@ must use separate `Store` connections to the same local SQLite file. `Store.clai
 the queue selection and fenced lease assignment one transaction. A crash can still repeat an
 external side effect before its checkpoint; use `Context.idempotency_key` downstream.
 
+Pass `stop_event=asyncio.Event()` and `drain_timeout=30` to `Worker.serve` to request a
+graceful stop. Once the event is set, the worker claims no more runs. It waits up to the
+timeout for owned runs to finish, then cancels remaining coroutines, marks their attempts
+interrupted, and releases those runs as `paused` for immediate takeover. `drain_timeout=0`
+pauses immediately; negative or non-finite values are rejected. Completed runs still reach
+`on_result` (or the `once=True` result list). Unfinished runs remain inspectable and resumable.
+The CLI worker handles SIGTERM this way by default; use `--drain-timeout SECONDS` to tune it.
+Ctrl-C retains its immediate interruption behavior. A hard kill cannot drain and leaves
+recovery to the lease timeout. Blocking or cancellation-suppressing tasks can delay shutdown.
+
 `Store.create(workflow, input, key="order-42", ready_at=timestamp)` supports retries by
 producers and delayed dispatch. A key is unique across the database, limited to 128 characters,
 and stored as a SHA-256 hash. Repeating it with the same workflow fingerprint and canonical JSON
@@ -156,7 +166,7 @@ Global flags go **before** the subcommand:
 retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{"count":128}'
 retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}'
 retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}' --key job-42 --delay 60
-retrace --db jobs.db worker my_pipeline:workflow --max-runs 2
+retrace --db jobs.db worker my_pipeline:workflow --max-runs 2 --drain-timeout 30
 retrace --db jobs.db worker my_pipeline:workflow --once
 retrace --db jobs.db cancel <RUN_ID>
 retrace --db jobs.db resume my_pipeline:workflow <RUN_ID>

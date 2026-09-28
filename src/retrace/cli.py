@@ -7,6 +7,7 @@ import asyncio
 import importlib
 import json
 import math
+import signal
 import sqlite3
 import sys
 import time
@@ -57,6 +58,12 @@ def parser() -> argparse.ArgumentParser:
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
     worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
     worker.add_argument("--once", action="store_true", help="drain available runs and exit")
+    worker.add_argument(
+        "--drain-timeout",
+        type=float,
+        default=30.0,
+        help="seconds to finish active runs after SIGTERM before pausing them (default: 30)",
+    )
     cancel = commands.add_parser("cancel", help="cancel a queued or active run by ID")
     cancel.add_argument("run_id")
     resume = commands.add_parser("resume", help="resume an interrupted run")
@@ -154,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
                 from retrace.worker import Worker
 
                 workflow = load_workflow(args.workflow)
+                if not math.isfinite(args.drain_timeout) or args.drain_timeout < 0:
+                    raise ValueError("drain timeout must be finite and nonnegative")
                 dispatcher = Worker(
                     store,
                     workflow,
@@ -162,15 +171,36 @@ def main(argv: list[str] | None = None) -> int:
                     lease_ttl=args.lease_ttl,
                     poll_interval=args.poll_interval,
                 )
-                if args.once:
-                    results = asyncio.run(dispatcher.serve(once=True))
-                    print(json.dumps([asdict(result) for result in results]))
-                else:
-                    asyncio.run(
-                        dispatcher.serve(
-                            on_result=lambda result: print(json.dumps(asdict(result)), flush=True)
+
+                async def serve_worker():
+                    stop = asyncio.Event()
+                    previous = signal.getsignal(signal.SIGTERM)
+
+                    def request_stop(_signum, _frame):
+                        stop.set()
+
+                    try:
+                        signal.signal(signal.SIGTERM, request_stop)
+                    except ValueError:
+                        # Signal handlers require the main thread; the Python API
+                        # can still stop a worker by passing stop_event directly.
+                        previous = None
+                    try:
+                        return await dispatcher.serve(
+                            once=args.once,
+                            on_result=None
+                            if args.once
+                            else lambda result: print(json.dumps(asdict(result)), flush=True),
+                            stop_event=stop,
+                            drain_timeout=args.drain_timeout,
                         )
-                    )
+                    finally:
+                        if previous is not None:
+                            signal.signal(signal.SIGTERM, previous)
+
+                results = asyncio.run(serve_worker())
+                if args.once:
+                    print(json.dumps([asdict(result) for result in results]))
             else:
                 spec = "retrace.demo:workflow" if args.command == "demo" else args.workflow
                 workflow = load_workflow(spec)

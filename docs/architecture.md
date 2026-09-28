@@ -42,6 +42,12 @@ local SQLite table, not a network broker. Each worker uses its own SQLite connec
 same machine and local disk. Worker processes require access to the same workflow code; a
 fingerprint mismatch leaves the run untouched.
 
+On SIGTERM, the CLI worker enters a drain phase: it stops claiming runs, waits for owned
+runs to complete up to `--drain-timeout`, then cancels active coroutines. The engine releases
+unfinished runs as `paused` and records interrupted attempts. Another local worker can claim
+them immediately. This avoids an unnecessary lease-expiry wait during rolling restarts. A
+hard kill or non-cooperative task still follows the existing lease and at-least-once contract.
+
 Submission keys and delayed eligibility are persisted on each run. Under `BEGIN IMMEDIATE`,
 `Store.create` checks a unique key hash before inserting. A matching workflow and input returns
 the original ID; a conflicting request fails. The first request fixes the schedule. Pending runs
@@ -141,6 +147,7 @@ depend on the filesystem and hardware honoring durability operations.
 | Old worker returns after takeover | Fenced write raises `LeaseLost`; result is rejected |
 | Exception or cooperative timeout | Failure count increments; retry or terminal failure is persisted |
 | SIGINT / coroutine cancellation | Running attempts become interrupted; run is paused |
+| SIGTERM during worker execution | Worker stops claiming, drains for a bounded time, then pauses unfinished runs for immediate reclaim |
 | Operator cancels run | Unfinished tasks become cancelled; old worker is fenced out; checkpoints remain |
 
 Use `Context.idempotency_key` for side-effect deduplication. The key is stable for one `(run_id,

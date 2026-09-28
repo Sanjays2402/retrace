@@ -590,6 +590,10 @@ export default function Home() {
               <CircleStop size={18} />
               <span><strong>Fenced cancellation</strong><small>Stop queued or active runs; preserve checkpoints and reject stale worker writes.</small></span>
             </div>
+            <div>
+              <Pause size={18} />
+              <span><strong>Graceful worker drain</strong><small>Stop new claims and hand unfinished runs to another local worker without waiting for a lease to expire.</small></span>
+            </div>
           </div>
           <div className="ownership-foot">
             <LockKeyhole size={15} />
