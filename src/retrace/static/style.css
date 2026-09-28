@@ -377,6 +377,10 @@ p {
   color: #a04e3c;
   background: #fbece7;
 }
+.badge.cancelled {
+  color: #665878;
+  background: #f0ecf4;
+}
 .detail-heading {
   padding: 21px 22px 12px;
   display: flex;
@@ -492,6 +496,9 @@ p {
 .node.retrying {
   border-color: #d9b76b;
 }
+.node.cancelled {
+  border-color: #a99bb7;
+}
 .graph-legend {
   display: flex;
   gap: 15px;
@@ -518,6 +525,9 @@ p {
 }
 .legend-dot.retrying {
   background: #ca9e3a;
+}
+.legend-dot.cancelled {
+  background: #8e7a9e;
 }
 .graph-tip {
   margin-left: auto;

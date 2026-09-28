@@ -73,6 +73,10 @@ class Engine:
             status = await scheduler
             self.store.release(lease, status)
             return self._result(run_id)
+        except LeaseLost:
+            if self.store.run(run_id)["status"] == "cancelled":
+                return self._result(run_id)
+            raise
         finally:
             scheduler.cancel()
             heartbeat.cancel()

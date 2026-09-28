@@ -87,6 +87,20 @@ runs per process; global `--concurrency` limits ready tasks **within each run**.
 single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
 pass `ctx.idempotency_key` to systems that support deduplication.
 
+## Cancel a queued or running run
+
+```bash
+retrace --db jobs.db cancel <RUN_ID>
+```
+
+Cancellation is durable and idempotent. It stops a queued run from being claimed, or revokes
+an active worker's lease immediately. Unfinished steps become `cancelled`; an active attempt
+is recorded as `interrupted`, while completed checkpoints and the event history remain
+available for inspection. The worker receives coroutine cancellation and its later database
+writes are fenced out. External side effects may already have happened, so tasks still need
+idempotency keys and should cooperate with asyncio cancellation. A cancelled run is terminal;
+create a new run to execute the workflow again.
+
 ## Recover a failed branch
 
 Fix the external cause of a failure, then preview and retry only the affected work:
@@ -164,7 +178,7 @@ asyncio.run(main())
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
 | Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
-| Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses the run |
+| Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
 | Local dashboard | Live polling, graph, attempt timeline, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
@@ -184,7 +198,8 @@ asyncio.run(main())
 - **Bump `Workflow.version` when implementation behavior changes.** The fingerprint covers
   graph structure, function identity, retry policy, and timeouts, not function source or dependencies.
 - **Tasks must cooperate with asyncio.** Blocking CPU work delays heartbeats. Timeouts and
-  cancellation cannot forcibly terminate code that suppresses cancellation.
+  cancellation cannot forcibly terminate code that suppresses cancellation. Explicit run
+  cancellation fences database writes but cannot undo external effects.
 - **Small JSON values, local disk.** Each input/output is limited to 1 MiB. Store large artifacts
   separately. Network filesystems, distributed clocks, encrypted storage, and multi-tenant
   hosting are outside the supported scope.

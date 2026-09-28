@@ -57,6 +57,8 @@ def parser() -> argparse.ArgumentParser:
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
     worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
     worker.add_argument("--once", action="store_true", help="drain available runs and exit")
+    cancel = commands.add_parser("cancel", help="cancel a queued or active run by ID")
+    cancel.add_argument("run_id")
     resume = commands.add_parser("resume", help="resume an interrupted run")
     resume.add_argument("workflow")
     resume.add_argument("run_id")
@@ -142,6 +144,11 @@ def main(argv: list[str] | None = None) -> int:
                     json.dumps(
                         {"run_id": run_id, "status": run["status"], "ready_at": run["ready_at"]}
                     )
+                )
+            elif args.command == "cancel":
+                changed = store.cancel(args.run_id)
+                print(
+                    json.dumps({"run_id": args.run_id, "status": "cancelled", "changed": changed})
                 )
             elif args.command == "worker":
                 from retrace.worker import Worker

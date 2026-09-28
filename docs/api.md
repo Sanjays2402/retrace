@@ -109,6 +109,22 @@ input returns the original run ID without creating new tasks or events; changing
 Unix timestamp. Explicit `Engine.resume` may claim one early, and claiming consumes the delay.
 This is **submission** deduplication; it does not make task side effects exactly once.
 
+## Durable run cancellation
+
+`store.cancel(run_id)` atomically marks a pending, running, or paused run `cancelled` and
+returns `True`. Calling it again returns `False`. An unknown ID raises `KeyError`; succeeded
+or failed runs raise `ValueError`. The CLI equivalent is `retrace --db jobs.db cancel <RUN_ID>`.
+
+Cancellation advances the ownership epoch and clears the lease so the previous worker cannot
+commit another checkpoint. Running attempts become `interrupted`; unfinished tasks become
+`cancelled`, and completed outputs remain available. A worker observing the lost lease stops
+its active coroutines and returns a `RunResult(status="cancelled")`. The event journal records
+the cancellation. A cancelled run is terminal: `resume` returns its stored result and `retry`
+does not reopen it. Create a new run if the workflow should execute again. External effects
+that happened before cancellation cannot be rolled back, and blocking code may continue until
+it cooperates. Cancelling an awaiting `Engine` coroutine or pressing Ctrl-C instead pauses the
+run for later resumption.
+
 ## Explicit retry and preview
 
 ```python
@@ -142,6 +158,7 @@ retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}'
 retrace --db jobs.db submit my_pipeline:workflow --input '{"count":128}' --key job-42 --delay 60
 retrace --db jobs.db worker my_pipeline:workflow --max-runs 2
 retrace --db jobs.db worker my_pipeline:workflow --once
+retrace --db jobs.db cancel <RUN_ID>
 retrace --db jobs.db resume my_pipeline:workflow <RUN_ID>
 retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch --dry-run
 retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch

@@ -111,6 +111,24 @@ class CLITests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)[0]["run_id"], first["run_id"])
 
+    def test_cancel_pending_run(self):
+        run_id = json.loads(
+            self.invoke("submit", "examples.pipeline:workflow", "--input", '{"values":[2,4]}')[1]
+        )["run_id"]
+        code, out, err = self.invoke("cancel", run_id)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(
+            json.loads(out), {"run_id": run_id, "status": "cancelled", "changed": True}
+        )
+        self.assertFalse(json.loads(self.invoke("cancel", run_id)[1])["changed"])
+        self.assertEqual(
+            json.loads(self.invoke("worker", "examples.pipeline:workflow", "--once")[1]), []
+        )
+        code, out, _ = self.invoke("resume", "examples.pipeline:workflow", run_id)
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(out)["status"], "cancelled")
+        self.assertEqual(self.invoke("cancel", "missing")[0], 2)
+
     def test_invalid_input_definition_and_unknown_run(self):
         for args in (
             ("run", "bad"),

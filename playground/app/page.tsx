@@ -546,6 +546,10 @@ export default function Home() {
               <Clock3 size={18} />
               <span><strong>Dispatch on schedule</strong><small>Queue now; let a worker claim the run after its delay expires.</small></span>
             </div>
+            <div>
+              <CircleStop size={18} />
+              <span><strong>Fenced cancellation</strong><small>Stop queued or active runs; preserve checkpoints and reject stale worker writes.</small></span>
+            </div>
           </div>
           <div className="ownership-foot">
             <LockKeyhole size={15} />

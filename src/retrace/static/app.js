@@ -134,9 +134,11 @@ function renderGraph(detail) {
             ? "✓"
             : s.status === "failed"
               ? "!"
-              : s.status === "running"
-                ? "◌"
-                : "·";
+              : s.status === "cancelled"
+                ? "×"
+                : s.status === "running"
+                  ? "◌"
+                  : "·";
         return `<button class="node ${escapeHTML(s.status)} ${t.name === state.task ? "selected" : ""}" data-task="${escapeHTML(t.name)}" aria-label="${escapeHTML(t.name)}: ${escapeHTML(s.status)}" style="left:${p.x}px;top:${p.y}px"><span class="node-name">${escapeHTML(t.name)}<span class="check">${icon}</span></span><span class="node-state">${escapeHTML(s.status)} · ${s.attempts} attempt${s.attempts === 1 ? "" : "s"}</span></button>`;
       })
       .join("");

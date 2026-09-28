@@ -65,6 +65,9 @@ stateDiagram-v2
     running --> succeeded: all tasks committed
     running --> failed: terminal task failure
     running --> paused: graceful cancellation / scheduler error
+    pending --> cancelled: operator cancellation
+    running --> cancelled: operator cancellation
+    paused --> cancelled: operator cancellation
     paused --> running: resume
     failed --> pending: explicit selective retry
     running --> running: expired lease reclaimed under new epoch
@@ -82,6 +85,10 @@ stateDiagram-v2
     running --> pending: interrupted attempt recovered
     failed --> pending: explicit retry
     blocked --> pending: all dependencies recovered or selected
+    pending --> cancelled: run cancelled
+    running --> cancelled: run cancelled
+    retrying --> cancelled: run cancelled
+    blocked --> cancelled: run cancelled
 ```
 
 Independent branches finish after a task fails; descendants are marked blocked without
@@ -97,6 +104,14 @@ previous status and budget count, followed by `run.retry_requested`. The run bec
 is then claimed normally with a new epoch. If the process exits between reset and execution,
 `resume` continues the pending run. Competing reset requests serialize in `BEGIN IMMEDIATE`;
 a second request sees the pending/running state and cannot reset the same failure again.
+
+Operator cancellation is a separate terminal transition. `Store.cancel` serializes with task
+commits under `BEGIN IMMEDIATE`, interrupts live attempts, marks unfinished tasks cancelled,
+advances the epoch, clears the lease, and appends `run.cancelled`. If a checkpoint commits
+before cancellation, it is preserved; if cancellation commits first, the old owner is fenced
+out. The scheduler cancels active coroutines when it observes the revoked lease. It cannot
+undo effects outside SQLite or force blocking work to stop. Repeating cancellation is a no-op;
+failed and succeeded runs cannot be cancelled.
 
 `Store.retry_plan` uses a read-only transaction for a consistent preview. It is a snapshot, not a
 reservation: applying retry revalidates the current state inside the write transaction. Retry
@@ -126,6 +141,7 @@ depend on the filesystem and hardware honoring durability operations.
 | Old worker returns after takeover | Fenced write raises `LeaseLost`; result is rejected |
 | Exception or cooperative timeout | Failure count increments; retry or terminal failure is persisted |
 | SIGINT / coroutine cancellation | Running attempts become interrupted; run is paused |
+| Operator cancels run | Unfinished tasks become cancelled; old worker is fenced out; checkpoints remain |
 
 Use `Context.idempotency_key` for side-effect deduplication. The key is stable for one `(run_id,
 task_name)` across attempts, but different runs intentionally get different keys. A payment,

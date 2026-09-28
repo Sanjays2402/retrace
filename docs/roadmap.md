@@ -12,6 +12,7 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 - A local multi-process worker pool with atomic queue claims, bounded parallel runs, and
   automatic recovery after a worker's lease expires.
 - Idempotent submission keys and delayed run eligibility with a v1-to-v2 schema migration.
+- Durable cancellation for queued and active runs, with lease revocation and preserved checkpoints.
 
 ## Small, well-scoped contributions
 

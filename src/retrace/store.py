@@ -347,6 +347,42 @@ class Store:
             self._event(run_id, "run.retry_requested", selected=plan.selected, reset=plan.reset)
             return plan
 
+    def cancel(self, run_id: str) -> bool:
+        """Atomically cancel an unfinished run and fence any current owner.
+
+        Returns False when already cancelled. Successful checkpoints and all
+        historical attempts remain available for inspection.
+        """
+        with self.transaction():
+            run = self.run(run_id)
+            if run["status"] == "cancelled":
+                return False
+            if run["status"] in ("succeeded", "failed"):
+                raise ValueError("completed runs cannot be cancelled")
+            now = time.time()
+            running = self.db.execute(
+                "SELECT name FROM tasks WHERE run_id=? AND status='running'", (run_id,)
+            ).fetchall()
+            for task in running:
+                self._event(run_id, "task.interrupted", task["name"], reason="run cancelled")
+            self.db.execute(
+                """UPDATE attempts SET status='interrupted',finished_at=?
+                WHERE run_id=? AND status='running'""",
+                (now, run_id),
+            )
+            changed = self.db.execute(
+                """UPDATE tasks SET status='cancelled',finished_at=?,next_at=0
+                WHERE run_id=? AND status NOT IN ('succeeded','failed','cancelled')""",
+                (now, run_id),
+            ).rowcount
+            self.db.execute(
+                """UPDATE runs SET status='cancelled',owner=NULL,epoch=epoch+1,
+                lease_until=0,ready_at=0,updated_at=? WHERE id=?""",
+                (now, run_id),
+            )
+            self._event(run_id, "run.cancelled", interrupted=len(running), cancelled=changed)
+            return True
+
     def claim(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
         with self.transaction():
             return self._claim_locked(run_id, workflow, ttl)
@@ -380,7 +416,7 @@ class Store:
             raise DefinitionMismatch(
                 "workflow changed; restore the original definition or start a new run"
             )
-        if run["status"] in ("succeeded", "failed"):
+        if run["status"] in ("succeeded", "failed", "cancelled"):
             return None
         now = time.time()
         if run["owner"] and run["lease_until"] > now:

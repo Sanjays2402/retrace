@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-09-27
+
+- Add durable, idempotent cancellation for queued, running, and paused runs via Python and CLI.
+- Revoke ownership immediately, fence stale workers, and preserve completed checkpoints and
+  interrupted attempt history for inspection.
+- Show cancelled tasks and runs in the local inspector; document the cancellation contract.
+
 ## 0.5.0 — 2026-09-26
 
 - Add idempotent submission keys: concurrent producers resolve to one durable run, while
