@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-09-28
+
+- Add a worker-epoch view to the local inspector so ownership handoffs, retries, and
+  interrupted attempts are visible alongside the graph and attempt timeline.
+- Preserve the selected view in permalinks and keep the visualization usable on mobile.
+
 ## 0.7.0 — 2026-09-28
 
 - Refresh the public playground theme with clearer visual hierarchy and responsive spacing.

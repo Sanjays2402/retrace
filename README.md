@@ -188,7 +188,7 @@ asyncio.run(main())
 | Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
-| Local dashboard | Live polling, graph, attempt timeline, journal filters, payload search, and JSONL download |
+| Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
 | Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |
 

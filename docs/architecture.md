@@ -180,6 +180,11 @@ retained window without changing the fetch cursor. JSONL download exports the ma
 in ascending ID order; `retrace events` exports the complete journal. Filters reset when changing
 runs, and expanded event payloads stay open during polling.
 
+The worker-epoch view groups the complete attempt history by fencing epoch and enriches it with
+claim times and recovery counts from the live journal when those events are still retained.
+It shows retry and takeover handoffs without exposing owner tokens. An old claim time may be
+absent after the browser's 1,000-event window advances; the attempt history remains complete.
+
 The UI treats stored values as data and escapes markup. Task outputs use `textContent`. The server
 binds only to `127.0.0.1`, validates Host and Origin, sends a restrictive Content Security Policy,
 and exposes no mutation endpoints. It has no authentication and is not an internet-facing server.

@@ -28,7 +28,7 @@
         <span class="small-label">BUILT TO PICK UP AGAIN</span>
         <p>The process can stop.<br />The progress stays.</p>
         <span class="version"
-          >v0.3.0 <span>•</span> zero runtime dependencies</span
+          >v0.7.1 <span>•</span> zero runtime dependencies</span
         >
       </div>
     </aside>
@@ -134,6 +134,13 @@
                 data-view="timeline"
               >
                 Attempt timeline</button
+              ><button
+                role="tab"
+                aria-selected="false"
+                id="tab-epochs"
+                data-view="epochs"
+              >
+                Worker epochs</button
               ><span id="checkpoint-count"></span>
             </div>
             <div id="graph-view" role="tabpanel" aria-labelledby="tab-graph">
@@ -161,6 +168,12 @@
               id="timeline-view"
               role="tabpanel"
               aria-labelledby="tab-timeline"
+              hidden
+            ></div>
+            <div
+              id="epochs-view"
+              role="tabpanel"
+              aria-labelledby="tab-epochs"
               hidden
             ></div>
             <div class="bottom-grid">

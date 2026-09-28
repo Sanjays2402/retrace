@@ -291,6 +291,33 @@ test("permalinks restore step and timeline across reload and browser history", a
   await expect(page.locator("#workflow-name")).toHaveText("html-output");
 });
 
+test("worker epochs visualize retry handoff and survive reload", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator(".run-card").filter({ hasText: "recovered-run" }).click();
+  await page.getByRole("tab", { name: "Worker epochs" }).click();
+  await expect(page.locator(".epoch-card")).toHaveCount(2);
+  await expect(page.locator(".epoch-card.failed")).toContainText("EPOCH 01");
+  await expect(page.locator(".epoch-card.completed")).toContainText("EPOCH 02");
+  await page.screenshot({
+    path: test.info().outputPath("worker-epochs.png"),
+    fullPage: true,
+  });
+  await expect(page).toHaveURL(/view=epochs/);
+  await page.reload();
+  await expect(
+    page.getByRole("tab", { name: "Worker epochs" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".epoch-card")).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("unknown run permalink can recover by selecting an existing run", async ({
   page,
 }) => {

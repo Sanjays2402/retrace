@@ -646,6 +646,111 @@ code {
   font-size: 8px;
   color: var(--muted);
 }
+#epochs-view {
+  min-height: 310px;
+  padding: 23px;
+  background: #fbfcf8;
+}
+.epoch-intro strong {
+  font:
+    20px Georgia,
+    serif;
+}
+.epoch-intro p,
+.epoch-note {
+  font-size: 11px;
+  max-width: 660px;
+}
+.epoch-intro p {
+  margin: 7px 0 22px;
+}
+.epoch-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 3px 18px;
+}
+.epoch-card {
+  flex: 0 0 205px;
+  min-height: 139px;
+  padding: 16px;
+  border: 1px solid #d6e0d1;
+  border-top: 3px solid #7fa770;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 13px #183b280b;
+}
+.epoch-card.active {
+  border-top-color: #6a9bbd;
+}
+.epoch-card.failed {
+  border-top-color: #d6a35a;
+}
+.epoch-card.interrupted {
+  border-top-color: #d68d72;
+}
+.epoch-card.expired,
+.epoch-card.paused,
+.epoch-card.cancelled {
+  border-top-color: #a5a4a0;
+}
+.epoch-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 9px var(--mono);
+  letter-spacing: 0.07em;
+  color: #52775b;
+  text-transform: uppercase;
+}
+.epoch-state {
+  color: #687d67;
+}
+.epoch-card strong {
+  display: block;
+  margin-top: 18px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.epoch-meter {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+  margin: 13px 0 11px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e8eee5;
+}
+.epoch-segment {
+  flex: 1;
+  min-width: 3px;
+  background: #b4d58e;
+}
+.epoch-segment.failed {
+  background: #e0b477;
+}
+.epoch-segment.interrupted {
+  background: #d7957e;
+}
+.epoch-segment.running {
+  background: #8dbacc;
+}
+.epoch-segment.empty {
+  background: #d3ded0;
+}
+.epoch-card small {
+  font: 9px var(--mono);
+  color: #6c7d6e;
+}
+.epoch-arrow {
+  flex: 0 0 auto;
+  color: #759974;
+  font-size: 21px;
+}
+.epoch-note {
+  margin: 2px 0 0;
+}
 footer {
   display: flex;
   gap: 14px;
@@ -787,11 +892,17 @@ footer a {
     margin: 5px 0 8px;
   }
   .view-tabs {
-    gap: 17px;
+    gap: 0 17px;
     padding: 0 14px;
+    flex-wrap: wrap;
   }
   .view-tabs > span {
     font-size: 8px;
+    flex-basis: 100%;
+    margin: -4px 0 8px;
+  }
+  #epochs-view {
+    padding: 18px 14px;
   }
   .detail-heading {
     padding: 18px 16px 12px;

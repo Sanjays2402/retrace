@@ -168,6 +168,67 @@ function renderTimeline(detail) {
       )
       .join("");
 }
+function renderEpochs(detail) {
+  const claims = new Map(
+    state.events
+      .filter((event) => event.kind === "run.claimed")
+      .map((event) => [event.payload.epoch, event]),
+  );
+  const epochs = [
+    ...new Set([
+      ...claims.keys(),
+      ...detail.attempts.map((attempt) => attempt.epoch),
+      ...(detail.run.status === "running" ? [detail.run.epoch] : []),
+    ]),
+  ]
+    .filter((epoch) => Number.isInteger(epoch) && epoch > 0)
+    .sort((a, b) => a - b);
+  if (!epochs.length) {
+    $("epochs-view").innerHTML =
+      '<p class="muted">No worker has claimed this run yet.</p>';
+    return;
+  }
+  const cards = epochs.map((epoch, index) => {
+    const attempts = detail.attempts.filter(
+      (attempt) => attempt.epoch === epoch,
+    );
+    const claim = claims.get(epoch);
+    let status = "completed";
+    if (epoch === detail.run.epoch && detail.run.status === "running")
+      status = effective(detail.run) === "running" ? "active" : "expired";
+    else if (
+      epoch === detail.run.epoch &&
+      ["paused", "cancelled"].includes(detail.run.status)
+    )
+      status = detail.run.status;
+    else if (attempts.some((attempt) => attempt.status === "interrupted"))
+      status = "interrupted";
+    else if (attempts.some((attempt) => attempt.status === "failed"))
+      status = "failed";
+    const origin = claim?.at ?? attempts[0]?.started_at;
+    const recovered =
+      Number.isSafeInteger(claim?.payload.recovered) &&
+      claim.payload.recovered > 0
+        ? claim.payload.recovered
+        : 0;
+    const meter = attempts.length
+      ? attempts
+          .map(
+            (attempt) =>
+              `<span class="epoch-segment ${escapeHTML(attempt.status)}" title="${escapeHTML(attempt.task_name)}: ${escapeHTML(attempt.status)}"></span>`,
+          )
+          .join("")
+      : '<span class="epoch-segment empty"></span>';
+    const card = `<div class="epoch-card ${status}" role="listitem"><div class="epoch-card-head"><span>EPOCH ${String(epoch).padStart(2, "0")}</span><span class="epoch-state">${status}</span></div><strong>${attempts.length} attempt${attempts.length === 1 ? "" : "s"}</strong><div class="epoch-meter" aria-label="${attempts.length} task attempts">${meter}</div><small>${origin ? `Claimed ${clock(origin)}` : "Claim time outside recent journal"} · ${recovered ? `${recovered} recovered` : "new claim"}</small></div>`;
+    return index === 0
+      ? card
+      : `<span class="epoch-arrow" aria-hidden="true">→</span>${card}`;
+  });
+  $("epochs-view").innerHTML =
+    '<div class="epoch-intro"><strong>Ownership handoffs</strong><p>Each claim advances the fencing epoch. Earlier workers cannot commit after a new owner takes over.</p></div>' +
+    `<div class="epoch-flow" role="list" aria-label="Worker ownership epochs">${cards.join("")}</div>` +
+    '<p class="epoch-note">Attempt colors: green committed · amber failed · coral interrupted · blue running. Claim times may be absent when the live journal has retained only recent events.</p>';
+}
 function renderTask() {
   if (!state.detail) return;
   const task = state.detail.tasks[state.task];
@@ -213,6 +274,7 @@ function renderDetail() {
   writeLocation(true);
   renderGraph(detail);
   renderTimeline(detail);
+  renderEpochs(detail);
   renderTask();
 }
 function syncOptions(id, choices) {
@@ -409,8 +471,8 @@ document.querySelectorAll("[data-view]").forEach((button) =>
     document
       .querySelectorAll("[data-view]")
       .forEach((b) => b.setAttribute("aria-selected", String(b === button)));
-    $("graph-view").hidden = button.dataset.view !== "graph";
-    $("timeline-view").hidden = button.dataset.view !== "timeline";
+    for (const view of ["graph", "timeline", "epochs"])
+      $(`${view}-view`).hidden = button.dataset.view !== view;
     writeLocation();
   }),
 );
@@ -452,7 +514,8 @@ function writeLocation(replace = false) {
   if (!state.selected) return;
   const params = new URLSearchParams({ run: state.selected });
   if (state.task) params.set("task", state.task);
-  if (!$("timeline-view").hidden) params.set("view", "timeline");
+  const view = ["timeline", "epochs"].find((name) => !$(`${name}-view`).hidden);
+  if (view) params.set("view", view);
   const hash = `#${params}`;
   if (location.hash !== hash)
     history[replace ? "replaceState" : "pushState"](null, "", hash);
@@ -467,9 +530,11 @@ function readLocation() {
   state.cursor = 0;
   clearEventFilters();
   $("run-detail").hidden = true;
-  const view = params.get("view") === "timeline" ? "timeline" : "graph";
-  $("graph-view").hidden = view !== "graph";
-  $("timeline-view").hidden = view !== "timeline";
+  const view = ["timeline", "epochs"].includes(params.get("view"))
+    ? params.get("view")
+    : "graph";
+  for (const name of ["graph", "timeline", "epochs"])
+    $(`${name}-view`).hidden = view !== name;
   document
     .querySelectorAll("[data-view]")
     .forEach((button) =>
