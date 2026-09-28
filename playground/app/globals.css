@@ -1435,3 +1435,411 @@ body {
     height: 34px;
   }
 }
+
+/* A clearer first impression for the public recovery lab. */
+:root {
+  --paper: #f3f5ee;
+  --ink: #172c25;
+  --muted: #576b60;
+  --border: #d4dfd3;
+}
+body {
+  background:
+    radial-gradient(ellipse 900px 580px at 72% -100px, #e4efd6 0%, transparent 72%),
+    var(--paper);
+}
+.sidebar {
+  background: linear-gradient(175deg, #193e33 0%, #102b25 58%, #0d211e 100%);
+  border-right: 1px solid #315348;
+}
+.brand {
+  letter-spacing: -0.07em;
+}
+.topbar > a.mobile-brand {
+  display: none;
+}
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.85fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 72px);
+  padding: clamp(44px, 5vw, 78px) 0 clamp(44px, 5vw, 68px);
+}
+.intro-copy {
+  min-width: 0;
+}
+.intro .eyebrow {
+  color: #315d41;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin-bottom: 20px;
+}
+.intro .eyebrow .live-dot {
+  width: 8px;
+  height: 8px;
+  background: #6a9a51;
+  box-shadow: 0 0 0 5px #b5d99c55;
+}
+.intro h1 {
+  font-size: clamp(50px, 4.8vw, 78px);
+  line-height: 1.02;
+  letter-spacing: -0.066em;
+  margin-bottom: 22px;
+  text-wrap: balance;
+}
+.intro h1 span {
+  color: #4c7647;
+}
+.intro p.intro-lede {
+  max-width: 590px;
+  font-size: 16px;
+  line-height: 1.68;
+  color: var(--muted);
+}
+.intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+.intro-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  min-height: 46px;
+  padding: 0 19px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.intro-actions a:hover {
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.hero-primary {
+  color: #142a1d;
+  background: #c4eb87;
+  box-shadow: 0 7px 18px #385c2630;
+}
+.hero-primary:hover {
+  box-shadow: 0 11px 23px #385c2640;
+}
+.hero-secondary {
+  color: var(--ink);
+  border: 1px solid #b6cbb4;
+  background: #ffffff9c;
+}
+.intro-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 19px;
+  margin-top: 24px;
+  color: #5a735c;
+  font: 11px var(--mono);
+}
+.intro-proof span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.intro-proof svg {
+  color: #4e814b;
+}
+.hero-trace {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #37604b;
+  border-radius: 15px;
+  background: #172d26;
+  color: #e7f1df;
+  box-shadow: 0 26px 60px #17352923, 0 5px 16px #17352918;
+  transform: rotate(1deg);
+}
+.hero-trace::before {
+  content: "";
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  background: #9ad46d22;
+  filter: blur(45px);
+  right: -100px;
+  top: 40px;
+  pointer-events: none;
+}
+.hero-trace-head,
+.hero-trace-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 17px 20px;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+}
+.hero-trace-head {
+  border-bottom: 1px solid #315345;
+  color: #9db6a3;
+}
+.hero-trace-head > span:first-child,
+.hero-trace-foot > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.trace-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c4eb87;
+  box-shadow: 0 0 0 4px #c4eb8726;
+}
+.hero-trace-body {
+  position: relative;
+  padding: 13px 20px 12px;
+}
+.trace-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 76px;
+}
+.trace-line:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  width: 1px;
+  height: 36px;
+  background: #54725d;
+  left: 15px;
+  top: 55px;
+}
+.trace-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: #183126;
+  background: #b8e284;
+}
+.trace-line.interrupted .trace-icon {
+  color: #f7e7d7;
+  background: #9d664d;
+}
+.trace-line.recovered .trace-icon {
+  background: #d7e5ba;
+}
+.trace-line strong,
+.trace-line small {
+  display: block;
+}
+.trace-line strong {
+  font-size: 13px;
+  letter-spacing: -0.015em;
+}
+.trace-line small {
+  color: #9db5a5;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.trace-time {
+  color: #93aa9b;
+  font: 10px var(--mono);
+}
+.hero-trace-foot {
+  border-top: 1px solid #315345;
+  color: #bad89e;
+}
+.hero-trace-foot > span:last-child {
+  color: #8da897;
+  white-space: nowrap;
+}
+.lab {
+  scroll-margin-top: 20px;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px #17352915, 0 3px 9px #1735290b;
+}
+.lab-heading {
+  padding-top: 26px;
+  padding-bottom: 23px;
+}
+.playback {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 20px;
+}
+.phase-rail {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 5px;
+  width: 100%;
+}
+.phase-rail button {
+  flex: 1;
+  min-width: 0;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 3px;
+}
+.phase-rail button span {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: 4px;
+  background: #d2dfcd;
+  transition: background 0.2s ease, height 0.2s ease;
+}
+.phase-rail button:hover span,
+.phase-rail button.current span {
+  height: 8px;
+  background: #46775a;
+}
+.phase-rail button.passed span {
+  background: #97ba83;
+}
+.playback.crashed .phase-rail button.current span {
+  background: #c27b53;
+}
+.install {
+  margin: 38px 0 24px;
+  padding: 31px;
+  border: 1px solid #cfdfc8;
+  border-radius: 15px;
+  background: linear-gradient(125deg, #e7f0df, #f4f8ef 58%, #e8f0e2);
+}
+.install h2 {
+  font-size: clamp(31px, 3.2vw, 45px);
+}
+:root[data-theme="dark"] .intro .eyebrow,
+:root[data-theme="dark"] .intro h1 span {
+  color: #b3df8f;
+}
+:root[data-theme="dark"] .intro-proof {
+  color: #adbea9;
+}
+:root[data-theme="dark"] .intro-proof svg {
+  color: #a8d88b;
+}
+:root[data-theme="dark"] .hero-secondary {
+  background: #213a30;
+  color: #ecf4e8;
+  border-color: #4c6a57;
+}
+:root[data-theme="dark"] .hero-trace {
+  box-shadow: 0 28px 75px #020e0b88;
+}
+:root[data-theme="dark"] .phase-rail button span {
+  background: #395444;
+}
+:root[data-theme="dark"] .phase-rail button:not(.node):not(.primary) {
+  background: transparent;
+  border: 0;
+}
+:root[data-theme="dark"] .phase-rail button.passed span {
+  background: #719a64;
+}
+:root[data-theme="dark"] .phase-rail button.current span {
+  background: #b6e38d;
+}
+:root[data-theme="dark"] .playback.crashed .phase-rail button.current span {
+  background: #e1a67b;
+}
+:root[data-theme="dark"] .install {
+  background: linear-gradient(125deg, #1d382c, #172b24);
+  border-color: #42634c;
+}
+@media (max-width: 1180px) {
+  .intro {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.75fr);
+    gap: 25px;
+  }
+  .intro h1 {
+    font-size: clamp(44px, 4.6vw, 60px);
+  }
+  .trace-time {
+    display: none;
+  }
+  .trace-line {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .topbar > a.mobile-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.06em;
+  }
+  .breadcrumb {
+    display: none;
+  }
+  .intro {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    padding: 45px 0;
+  }
+  .intro h1 {
+    font-size: clamp(48px, 7vw, 68px);
+  }
+  .hero-trace {
+    width: min(100%, 590px);
+    transform: none;
+  }
+  .playback {
+    grid-template-columns: 1fr;
+  }
+  .phase-rail {
+    grid-column: 1;
+  }
+}
+@media (max-width: 600px) {
+  .intro {
+    gap: 27px;
+    padding: 32px 0 34px;
+  }
+  .intro h1 {
+    font-size: clamp(42px, 11vw, 56px);
+  }
+  .intro p.intro-lede {
+    font-size: 14px;
+  }
+  .intro-actions {
+    gap: 9px;
+  }
+  .intro-actions a {
+    flex: 1 1 100%;
+  }
+  .intro-proof {
+    margin-top: 19px;
+    gap: 8px 13px;
+    font-size: 10px;
+  }
+  .hero-trace-head,
+  .hero-trace-foot {
+    padding: 13px 14px;
+    font-size: 9px;
+  }
+  .hero-trace-body {
+    padding: 9px 14px;
+  }
+  .trace-line {
+    min-height: 66px;
+  }
+  .trace-line:not(:last-child)::after {
+    height: 27px;
+  }
+  .install {
+    padding: 22px 18px;
+    margin-top: 30px;
+  }
+}

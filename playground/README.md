@@ -16,23 +16,26 @@ npm run dev
 
 ```sh
 npm run check
+npm run lint
 npm test
-npm run build
+npm run build:pages
 ```
 
-The static output is `dist/client`. To inspect the production build locally:
+The static GitHub Pages output is `dist/pages`. To inspect it locally:
 
 ```sh
-python3 -m http.server 3000 --bind 127.0.0.1 --directory dist/client
+npx vite preview --config vite.pages.config.ts --host 127.0.0.1
 ```
+
+Open `http://127.0.0.1:4173/retrace/`.
 
 ## Behavior
 
-- Advance one event, autoplay to the crash, resume, or replay.
+- Advance one event, jump along the event rail, autoplay to the crash, resume, or replay.
 - Inspect successful checkpoints and the interrupted/retried attempt history.
 - Filter the event journal to a selected step.
 - Preview, copy, or download a synthetic JSON snapshot. Uncommitted outputs are null.
-- Follow a worker handoff diagram and see how idempotent submission and delayed dispatch fit
+- Follow a worker handoff diagram and see how idempotent submission and durable signals fit
   into the local queue. These explanations are illustrative; the browser does not enqueue runs.
 - Optional WebMCP control uses the same validated model. Visible controls work
   without that API.
@@ -52,8 +55,8 @@ changes to `playground/` in `main`, then publishes the static output. It can als
 be run manually from Actions. GitHub Pages must use the **GitHub Actions** source.
 
 The build reads `NEXT_PUBLIC_BASE_PATH` from GitHub Pages configuration so asset
-URLs work under the repository path. The default is an empty prefix for local
-and root-domain hosting. To reproduce the project-site build:
+URLs work under the repository path. The Pages build defaults to `/retrace`; override
+`NEXT_PUBLIC_BASE_PATH` for a different deployment prefix. To reproduce the project-site build:
 
 ```sh
 NEXT_PUBLIC_BASE_PATH=/retrace npm run build:pages

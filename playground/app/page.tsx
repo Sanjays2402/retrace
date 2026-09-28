@@ -29,6 +29,17 @@ const repo = "https://github.com/Sanjays2402/retrace";
 const command =
   "python -m pip install git+https://github.com/Sanjays2402/retrace.git";
 const icons = [FileText, ShieldCheck, Database, ArrowUpRight];
+const phaseLabels = [
+  "Run created",
+  "Read started",
+  "Read committed",
+  "Validation committed",
+  "Worker interrupted",
+  "New worker claimed",
+  "Summary committed",
+  "Run completed",
+];
+const phaseFocus = [0, 0, 0, 1, 2, 2, 2, 3];
 export default function Home() {
   const [phase, setPhase] = useState(0),
     [selected, setSelected] = useState(0),
@@ -149,6 +160,11 @@ export default function Home() {
     setPhase(0);
     setSelected(0);
   }
+  function seek(next: number) {
+    setPlaying(false);
+    setPhase(next);
+    setSelected(phaseFocus[next]);
+  }
   async function copy() {
     try {
       await navigator.clipboard.writeText(command);
@@ -215,6 +231,15 @@ export default function Home() {
       </aside>
       <div className="content">
         <header className="topbar">
+          <a className="mobile-brand" href={repo} aria-label="Retrace on GitHub">
+            <img
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/mark.svg`}
+              alt=""
+              width="27"
+              height="27"
+            />
+            retrace
+          </a>
           <div className="breadcrumb">
             Playground <ChevronRight size={14} />
             <strong>Recovery lab</strong>
@@ -235,33 +260,63 @@ export default function Home() {
           </div>
         </header>
         <section className="intro">
-          <div>
+          <div className="intro-copy">
             <p className="eyebrow">
-              <span className="live-dot" /> EXPLORE DURABLE EXECUTION
+              <span className="live-dot" /> THE INTERACTIVE RECOVERY LAB
             </p>
             <h1>
-              Break a run.
+              Crash the worker.
               <br />
-              <span>Watch it recover.</span>
+              <span>Keep the progress.</span>
             </h1>
-            <p>
-              Take a pipeline through a crash and back.
-              <br />
-              Your checkpoints tell the story.
+            <p className="intro-lede">
+              See exactly what survives a process failure. Step through a real
+              recovery story, inspect every checkpoint, and watch a new worker
+              pick up where the last one stopped.
             </p>
+            <div className="intro-actions">
+              <a className="hero-primary" href="#lab">
+                Explore the demo <ArrowRight size={17} />
+              </a>
+              <a className="hero-secondary" href="#install">
+                Run it yourself <ArrowUpRight size={16} />
+              </a>
+            </div>
+            <div className="intro-proof" aria-label="Retrace capabilities">
+              <span><Check size={14} /> SQLite durability</span>
+              <span><Check size={14} /> Fenced workers</span>
+              <span><Check size={14} /> No services</span>
+            </div>
           </div>
-          <div className="intro-note">
-            <span className="sample-pill">Interactive sample</span>
-            <p>
-              No install. No account.
-              <br />A guided look at how Retrace works.
-            </p>
-            <a href="#install">
-              Try the real engine <ArrowRight size={15} />
-            </a>
+          <div className="hero-trace" aria-label="Illustrative recovery trace">
+            <div className="hero-trace-head">
+              <span><span className="trace-pulse" /> RECOVERY TRACE</span>
+              <span>RUN / ORDERS-042</span>
+            </div>
+            <div className="hero-trace-body">
+              <div className="trace-line committed">
+                <span className="trace-icon"><Check size={15} /></span>
+                <div><strong>Input checkpointed</strong><small>128 rows saved to SQLite</small></div>
+                <span className="trace-time">00:00.48</span>
+              </div>
+              <div className="trace-line interrupted">
+                <span className="trace-icon"><CircleStop size={15} /></span>
+                <div><strong>Worker interrupted</strong><small>Uncommitted step discarded</small></div>
+                <span className="trace-time">00:00.95</span>
+              </div>
+              <div className="trace-line recovered">
+                <span className="trace-icon"><GitBranch size={15} /></span>
+                <div><strong>Run recovered</strong><small>Two checkpoints reused</small></div>
+                <span className="trace-time">00:16.00</span>
+              </div>
+            </div>
+            <div className="hero-trace-foot">
+              <span><ShieldCheck size={15} /> Progress preserved</span>
+              <span>SIMULATED TRACE <ArrowUpRight size={13} /></span>
+            </div>
           </div>
         </section>
-        <section className="lab" aria-label="Workflow recovery playground">
+        <section id="lab" className="lab" aria-label="Workflow recovery playground">
           <div className="lab-heading">
             <div>
               <p className="eyebrow">WORKFLOW / CSV ORDERS</p>
@@ -444,6 +499,21 @@ export default function Home() {
                       : "Play walkthrough"}
               </button>
             </div>
+            <div className="phase-rail" aria-label="Recovery timeline">
+              {phaseLabels.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={index === phase ? "current" : index < phase ? "passed" : ""}
+                  aria-label={`Go to event ${index + 1}: ${label}`}
+                  aria-current={index === phase ? "step" : undefined}
+                  title={`${index + 1}. ${label}`}
+                  onClick={() => seek(index)}
+                >
+                  <span />
+                </button>
+              ))}
+            </div>
           </div>
           <div className="detail-grid">
             <section className="inspector">
@@ -584,7 +654,7 @@ export default function Home() {
             </div>
             <div>
               <Clock3 size={18} />
-              <span><strong>Dispatch on schedule</strong><small>Queue now; let a worker claim the run after its delay expires.</small></span>
+              <span><strong>Durable signals</strong><small>Wait for a decision without occupying a worker; resume when its signal arrives.</small></span>
             </div>
             <div>
               <CircleStop size={18} />

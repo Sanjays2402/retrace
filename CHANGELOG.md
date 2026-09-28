@@ -6,6 +6,8 @@
   a signal wakes the run without losing completed checkpoints.
 - Handle signal-before-wait delivery, duplicate delivery, and the release race transactionally.
 - Show waiting tasks in the local inspector and add a CLI signal command and approval example.
+- Refresh the public recovery lab with a visual trace, responsive hero, direct navigation to
+  the demo, and an accessible event rail for jumping between recovery phases.
 
 ## 0.7.1 — 2026-09-28
 
