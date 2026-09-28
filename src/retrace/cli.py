@@ -66,6 +66,10 @@ def parser() -> argparse.ArgumentParser:
     )
     cancel = commands.add_parser("cancel", help="cancel a queued or active run by ID")
     cancel.add_argument("run_id")
+    send_signal = commands.add_parser("signal", help="deliver a durable one-shot signal")
+    send_signal.add_argument("run_id")
+    send_signal.add_argument("name")
+    send_signal.add_argument("--payload", default="null", help="JSON signal payload")
     resume = commands.add_parser("resume", help="resume an interrupted run")
     resume.add_argument("workflow")
     resume.add_argument("run_id")
@@ -121,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
                             "run": store.run(args.run_id),
                             "tasks": store.tasks(args.run_id),
                             "attempts": store.history(args.run_id),
+                            "signals": store.signals(args.run_id),
                         },
                         indent=2,
                     )
@@ -157,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     json.dumps({"run_id": args.run_id, "status": "cancelled", "changed": changed})
                 )
+            elif args.command == "signal":
+                changed = store.signal(args.run_id, args.name, json.loads(args.payload))
+                print(json.dumps({"run_id": args.run_id, "name": args.name, "delivered": changed}))
             elif args.command == "worker":
                 from retrace.worker import Worker
 

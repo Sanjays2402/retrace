@@ -70,10 +70,13 @@ stateDiagram-v2
     pending --> running: acquire lease
     running --> succeeded: all tasks committed
     running --> failed: terminal task failure
+    running --> waiting: no executable task; signal absent
+    waiting --> pending: signal delivered
     running --> paused: graceful cancellation / scheduler error
     pending --> cancelled: operator cancellation
     running --> cancelled: operator cancellation
     paused --> cancelled: operator cancellation
+    waiting --> cancelled: operator cancellation
     paused --> running: resume
     failed --> pending: explicit selective retry
     running --> running: expired lease reclaimed under new epoch
@@ -88,6 +91,8 @@ stateDiagram-v2
     retrying --> running: persisted deadline reached
     running --> failed: failure budget exhausted
     pending --> blocked: failed or blocked dependency
+    pending --> waiting: dependency ready; signal absent
+    waiting --> pending: signal received
     running --> pending: interrupted attempt recovered
     failed --> pending: explicit retry
     blocked --> pending: all dependencies recovered or selected
@@ -95,6 +100,7 @@ stateDiagram-v2
     running --> cancelled: run cancelled
     retrying --> cancelled: run cancelled
     blocked --> cancelled: run cancelled
+    waiting --> cancelled: run cancelled
 ```
 
 Independent branches finish after a task fails; descendants are marked blocked without
@@ -103,6 +109,14 @@ results for failed and succeeded runs without retrying functions. Explicit `retr
 failed run. It validates the same workflow fingerprint, checks ownership, and atomically resets
 selected failed steps and blocked descendants whose dependencies can all make progress. Successful
 checkpoints stay unchanged. A branch left failed keeps its shared descendants blocked.
+
+A signal-gated task moves to `waiting` only after its dependencies succeed. The scheduler
+releases the run lease when no other work is executable, and the local queue excludes waiting
+runs. `Store.signal` inserts one immutable payload and wakes matching tasks in the same write
+transaction. Signal-before-wait is safe: the scheduler checks again under the write lock before
+parking a task. If delivery races with lease release, release leaves the run pending for another
+claim. Successful upstream checkpoints and the signal survive a crash. Waiting consumes no
+attempt; task execution after a signal retains normal at-least-once semantics.
 
 Retry resets each affected task's current failure budget to zero, while preserving attempt numbers,
 attempt records, idempotency keys, and all existing events. Each `task.reset` event records the
@@ -149,6 +163,7 @@ depend on the filesystem and hardware honoring durability operations.
 | SIGINT / coroutine cancellation | Running attempts become interrupted; run is paused |
 | SIGTERM during worker execution | Worker stops claiming, drains for a bounded time, then pauses unfinished runs for immediate reclaim |
 | Operator cancels run | Unfinished tasks become cancelled; old worker is fenced out; checkpoints remain |
+| Signal arrives while run waits | Signal commits and the run becomes eligible for another worker claim |
 
 Use `Context.idempotency_key` for side-effect deduplication. The key is stable for one `(run_id,
 task_name)` across attempts, but different runs intentionally get different keys. A payment,
@@ -192,9 +207,10 @@ and exposes no mutation endpoints. It has no authentication and is not an intern
 ## Storage and scale
 
 `runs` stores definition, input, lease, and overall state; `tasks` stores the latest checkpoint;
-`attempts` preserves execution history; `events` is the ordered audit log. Foreign keys are enabled.
-`PRAGMA user_version=2` marks the schema; unknown future versions are refused. Opening a v1
-database for writing adds the submission-key hash and eligibility columns in a transaction,
+`attempts` preserves execution history; `events` is the ordered audit log; `signals` stores
+one payload per run and signal name. Foreign keys are enabled.
+`PRAGMA user_version=3` marks the schema; unknown future versions are refused. Opening an older
+database for writing applies the submission and signal migrations in transactions,
 preserving existing runs and checkpoints. Read-only connections do not migrate. Back up
 databases before upgrading alpha versions; a general migration framework is still future work.
 

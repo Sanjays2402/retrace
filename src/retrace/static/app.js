@@ -34,7 +34,7 @@ const effective = (run) =>
     ? "interrupted"
     : run.status;
 const needsAttention = (run) =>
-  ["failed", "paused", "interrupted"].includes(effective(run));
+  ["failed", "paused", "interrupted", "waiting"].includes(effective(run));
 async function api(path) {
   const response = await fetch(path, { cache: "no-store" });
   if (!response.ok) {
@@ -138,7 +138,9 @@ function renderGraph(detail) {
                 ? "×"
                 : s.status === "running"
                   ? "◌"
-                  : "·";
+                  : s.status === "waiting"
+                    ? "◇"
+                    : "·";
         return `<button class="node ${escapeHTML(s.status)} ${t.name === state.task ? "selected" : ""}" data-task="${escapeHTML(t.name)}" aria-label="${escapeHTML(t.name)}: ${escapeHTML(s.status)}" style="left:${p.x}px;top:${p.y}px"><span class="node-name">${escapeHTML(t.name)}<span class="check">${icon}</span></span><span class="node-state">${escapeHTML(s.status)} · ${s.attempts} attempt${s.attempts === 1 ? "" : "s"}</span></button>`;
       })
       .join("");
@@ -245,7 +247,9 @@ function renderTask() {
     task.error ||
     (task.status === "succeeded"
       ? JSON.stringify(task.output, null, 2)
-      : "No committed output yet.");
+      : task.status === "waiting"
+        ? `Waiting for signal: ${state.detail.run.manifest.tasks.find((item) => item.name === task.name)?.wait_for || "unknown"}`
+        : "No committed output yet.");
 }
 function renderDetail() {
   const detail = state.detail;

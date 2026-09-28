@@ -23,6 +23,10 @@ async def recover(ctx):
     return {"recovered": True}
 
 
+async def receive(ctx):
+    return ctx.signal
+
+
 async def populate(path):
     with Store(path) as store:
         await Engine(store).run(Workflow("html-output", (Task("output", untrusted_output),)))
@@ -30,6 +34,8 @@ async def populate(path):
         recovered = Workflow("recovered-run", (Task("recover", recover, retry=RetryPolicy(1)),))
         result = await Engine(store).run(recovered)
         await Engine(store).retry(recovered, result.run_id)
+        waiting = Workflow("waiting-run", (Task("approval", receive, wait_for="go"),))
+        await Engine(store).run(waiting)
         await Engine(store).run(workflow, {"crash": False})
 
 

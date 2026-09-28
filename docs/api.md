@@ -42,6 +42,7 @@ same DAG. Duplicate names, duplicate dependencies, missing dependencies, and cyc
 | `attempt` | 1-based attempt number, including previous interruptions |
 | `input` | Independently decoded workflow input |
 | `dependencies` | Mapping of direct dependency names to committed JSON outputs |
+| `signal` | JSON payload of the declared signal gate, or `None` for ordinary tasks |
 | `idempotency_key` | Stable SHA-256 key for this logical task within this run |
 
 Default retry policy: three failed attempts, initial delay 0.25 s, max delay 30 s. Default
@@ -64,6 +65,31 @@ with Store("jobs.db") as store:
 `Engine.resume` lets a caller save the run ID first. Both execution methods return `RunResult`
 with `run_id`, `status`, `outputs` of succeeded tasks, and `errors` of failed tasks. A terminal
 failed workflow returns a result with `status="failed"`; infrastructure/ownership errors raise.
+
+## Durable signals
+
+Set `Task(..., wait_for="decision")` to gate a task on an external event. After its
+dependencies succeed, Retrace records the task as `waiting` and releases the run lease.
+No attempt or timeout budget is spent while it waits. The run result has `status="waiting"`.
+The task's `ctx.signal` receives the decoded JSON payload when it eventually executes.
+
+```bash
+retrace --db jobs.db run examples.approval:workflow --input '{"request":"release-42"}'
+# Copy the run ID printed on stderr; the run now waits without occupying a worker.
+retrace --db jobs.db signal RUN_ID decision --payload '{"approved":true}'
+retrace --db jobs.db resume examples.approval:workflow RUN_ID
+```
+
+Or call `store.signal(run_id, "decision", {"approved": True})`. The signal can arrive
+before the gate is reached. Delivery is one-shot per run and signal name: identical
+redelivery returns `False`, while a different payload raises `ValueError`. The payload is
+immutable and survives worker crashes and task retries. Multiple tasks may use the same
+signal, each receiving its own decoded copy. `Store.signals(run_id)` lists delivered
+signals. Signals must be declared by at least one task and cannot be newly delivered to
+a terminal run. A waiting run is not claimed again until a matching signal arrives;
+`Worker.serve()` automatically resumes it on the next poll. Waiting has no deadline yet;
+cancel the run if the external decision will never arrive. Cancellation also fences an
+active worker and leaves the signal history inspectable.
 
 Important exceptions:
 

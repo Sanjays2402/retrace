@@ -16,11 +16,24 @@ test("real checkpoints, retries, timeline, search, and filters", async ({
   await expect(page.locator(".run-card")).toHaveCount(0);
   await page.locator("#search").fill("");
   await page.locator('[data-filter="attention"]').click();
-  await expect(page.locator(".run-card")).toHaveCount(1);
-  await page.locator(".run-card").click();
+  await expect(page.locator(".run-card")).toHaveCount(2);
+  await page.locator(".run-card").filter({ hasText: "failed-run" }).click();
   await expect(page.locator("#run-status")).toHaveText("failed");
   await expect(page.locator("#task-output")).toContainText("fixture failure");
   expect(errors).toEqual([]);
+});
+
+test("waiting signals are visible without a running attempt", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator(".run-card").filter({ hasText: "waiting-run" }).click();
+  await expect(page.locator("#run-status")).toHaveText("waiting");
+  await expect(page.locator(".node.waiting")).toHaveCount(1);
+  await expect(page.locator("#task-output")).toContainText(
+    "Waiting for signal: go",
+  );
+  await expect(page.locator("#task-meta")).toContainText("0 attempts");
 });
 
 test("stored output is rendered as text, never executable markup", async ({

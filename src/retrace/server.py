@@ -87,6 +87,7 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
                                     "run": run,
                                     "tasks": store.tasks(run_id),
                                     "attempts": store.history(run_id),
+                                    "signals": store.signals(run_id),
                                 },
                             )
                         elif parts[3] == "events":

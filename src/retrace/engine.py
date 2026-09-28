@@ -93,12 +93,18 @@ class Engine:
     async def _execute(self, task: Task, lease: Lease, state: dict[str, Any]) -> None:
         attempt = self.store.start_task(lease, task.name)
         snapshots = self.store.tasks(lease.run_id)
+        signal = None
+        if task.wait_for is not None:
+            present, signal = self.store.signal_payload(lease.run_id, task.wait_for)
+            if not present:
+                raise RuntimeError(f"task {task.name} started without signal {task.wait_for}")
         context = Context(
             lease.run_id,
             task.name,
             attempt,
             self.store.run(lease.run_id)["input"],
             {name: snapshots[name]["output"] for name in task.needs},
+            signal,
         )
         try:
             output = await asyncio.wait_for(task.fn(context), timeout=task.timeout)
@@ -138,6 +144,11 @@ class Engine:
                         and state["next_at"] <= time.time()
                         and all(status == "succeeded" for status in dependencies)
                     ):
+                        if task.wait_for is not None:
+                            present, _ = self.store.signal_payload(lease.run_id, task.wait_for)
+                            if not present:
+                                self.store.mark_waiting(lease, task.name, task.wait_for)
+                                continue
                         active[task.name] = asyncio.create_task(self._execute(task, lease, state))
                 states = self.store.tasks(lease.run_id)
                 if not active and all(
@@ -148,6 +159,14 @@ class Engine:
                         if any(t["status"] == "failed" for t in states.values())
                         else "succeeded"
                     )
+                if not active and any(t["status"] == "waiting" for t in states.values()):
+                    runnable = any(
+                        states[t.name]["status"] in ("pending", "retrying")
+                        and all(states[dep]["status"] == "succeeded" for dep in t.needs)
+                        for t in workflow.tasks
+                    )
+                    if not runnable:
+                        return "waiting"
                 if active:
                     await asyncio.wait(
                         active.values(), timeout=0.05, return_when=asyncio.FIRST_COMPLETED

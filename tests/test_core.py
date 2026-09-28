@@ -324,6 +324,10 @@ class WorkflowTests(unittest.TestCase):
         a = Workflow("test", tasks)
         self.assertEqual(a.fingerprint, Workflow("test", tuple(reversed(tasks))).fingerprint)
         self.assertNotEqual(a.fingerprint, Workflow("test", tasks, version="2").fingerprint)
+        self.assertNotEqual(
+            a.fingerprint,
+            Workflow("test", (Task("a", value, wait_for="go"), tasks[1])).fingerprint,
+        )
 
     def test_backoff_cap(self):
         retry = RetryPolicy(initial_delay=1, max_delay=5)

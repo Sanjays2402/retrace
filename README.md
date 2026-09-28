@@ -55,6 +55,23 @@ attempt stays visible in the timeline; a new worker completes the run. The integ
 also kills a real child process without cleanup, resumes it in a different process, verifies
 that a completed step ran once, and checks SQLite integrity.
 
+## Pause for an external decision
+
+Declare `Task("publish", fn, wait_for="decision")` to park a step until a durable signal
+arrives. Retrace releases the run lease while it waits, so the worker can process other runs.
+The decision may arrive before or after the step reaches its gate. On execution, the task
+receives its JSON payload as `ctx.signal`.
+
+```bash
+retrace --db jobs.db run examples.approval:workflow --input '{"request":"release-42"}'
+# Copy the run ID printed on stderr; the result says "waiting".
+retrace --db jobs.db signal RUN_ID decision --payload '{"approved":true}'
+retrace --db jobs.db resume examples.approval:workflow RUN_ID
+```
+
+For queued work, a polling worker resumes the run automatically after signal delivery.
+See the [API guide](docs/api.md#durable-signals) for duplicate and cancellation behavior.
+
 ## Queue runs across local worker processes
 
 Submit runs without starting them, then run one or more workers against the same **local**
@@ -186,6 +203,7 @@ asyncio.run(main())
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
 | Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
+| Durable signals | One-shot JSON messages can arrive before or after a task waits; waiting runs release their worker lease |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
 | Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |

@@ -19,7 +19,7 @@ from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Any
 
-from retrace.workflow import Workflow, encode
+from retrace.workflow import _NAME, Workflow, encode
 
 
 class RunBusy(RuntimeError):
@@ -109,7 +109,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1, 2):
+        if version not in (0, 1, 2, 3):
             self.db.close()
             raise ValueError(f"unsupported database schema version: {version}")
         if not readonly:
@@ -135,6 +135,16 @@ class Store:
                         ON runs(fingerprint,status,ready_at,created_at)"""
                     )
                     self.db.execute("PRAGMA user_version=2")
+            if version < 3:
+                with self.transaction():
+                    self.db.execute(
+                        """CREATE TABLE IF NOT EXISTS signals (
+                        run_id TEXT NOT NULL REFERENCES runs(id), name TEXT NOT NULL,
+                        payload TEXT NOT NULL, received_at REAL NOT NULL,
+                        PRIMARY KEY (run_id, name))"""
+                    )
+                    self.db.execute("PRAGMA user_version=3")
+        self.schema_version = self.db.execute("PRAGMA user_version").fetchone()[0]
 
     def close(self) -> None:
         self.db.close()
@@ -244,6 +254,67 @@ class Store:
             task["output"] = json.loads(task["output"]) if task["output"] is not None else None
             result[task["name"]] = task
         return result
+
+    def signal_payload(self, run_id: str, name: str) -> tuple[bool, Any]:
+        """Return presence separately because JSON null is a valid signal payload."""
+        row = self.db.execute(
+            "SELECT payload FROM signals WHERE run_id=? AND name=?", (run_id, name)
+        ).fetchone()
+        return (False, None) if row is None else (True, json.loads(row["payload"]))
+
+    def signals(self, run_id: str) -> list[dict[str, Any]]:
+        self.run(run_id)
+        if self.schema_version < 3:
+            return []
+        return [
+            {**dict(row), "payload": json.loads(row["payload"])}
+            for row in self.db.execute(
+                """SELECT name,payload,received_at FROM signals
+                WHERE run_id=? ORDER BY received_at,name""",
+                (run_id,),
+            )
+        ]
+
+    def signal(self, run_id: str, name: str, payload: Any = None) -> bool:
+        """Deliver a one-shot signal; identical redelivery is a no-op.
+
+        A signal may arrive before its gate is reached. Its immutable payload is
+        retained across task retries and process crashes.
+        """
+        if not isinstance(name, str) or not _NAME.fullmatch(name):
+            raise ValueError("invalid signal name")
+        data = encode(payload)
+        with self.transaction():
+            run = self.run(run_id)
+            if not any(t.get("wait_for") == name for t in run["manifest"]["tasks"]):
+                raise ValueError(f"workflow has no task waiting for signal {name!r}")
+            existing = self.db.execute(
+                "SELECT payload FROM signals WHERE run_id=? AND name=?", (run_id, name)
+            ).fetchone()
+            if existing is not None:
+                if existing["payload"] != data:
+                    raise ValueError("signal already delivered with a different payload")
+                return False
+            if run["status"] in ("succeeded", "failed", "cancelled"):
+                raise ValueError("completed runs cannot receive new signals")
+            now = time.time()
+            self.db.execute(
+                "INSERT INTO signals(run_id,name,payload,received_at) VALUES(?,?,?,?)",
+                (run_id, name, data, now),
+            )
+            waiting = [t["name"] for t in run["manifest"]["tasks"] if t.get("wait_for") == name]
+            woke = self.db.execute(
+                f"UPDATE tasks SET status='pending' WHERE run_id=? AND status='waiting' "
+                f"AND name IN ({','.join('?' for _ in waiting)})",
+                (run_id, *waiting),
+            ).rowcount
+            if run["status"] == "waiting" and woke:
+                self.db.execute(
+                    "UPDATE runs SET status='pending',updated_at=? WHERE id=?",
+                    (now, run_id),
+                )
+            self._event(run_id, "signal.received", name=name)
+            return True
 
     def runs(self, limit: int = 100) -> list[dict[str, Any]]:
         return [
@@ -416,7 +487,7 @@ class Store:
             raise DefinitionMismatch(
                 "workflow changed; restore the original definition or start a new run"
             )
-        if run["status"] in ("succeeded", "failed", "cancelled"):
+        if run["status"] in ("succeeded", "failed", "cancelled", "waiting"):
             return None
         now = time.time()
         if run["owner"] and run["lease_until"] > now:
@@ -489,6 +560,23 @@ class Store:
             self._event(lease.run_id, "task.started", name, attempt=attempt)
             return attempt
 
+    def mark_waiting(self, lease: Lease, name: str, signal: str) -> bool:
+        """Park an unstarted task unless its signal arrived first."""
+        with self.transaction():
+            self._fence(lease)
+            if self.db.execute(
+                "SELECT 1 FROM signals WHERE run_id=? AND name=?", (lease.run_id, signal)
+            ).fetchone():
+                return False
+            changed = self.db.execute(
+                """UPDATE tasks SET status='waiting' WHERE run_id=? AND name=?
+                AND status='pending'""",
+                (lease.run_id, name),
+            ).rowcount
+            if changed:
+                self._event(lease.run_id, "task.waiting", name, signal=signal)
+            return bool(changed)
+
     def finish_task(
         self,
         lease: Lease,
@@ -540,7 +628,7 @@ class Store:
                 self._event(lease.run_id, "task.blocked", name, reason="dependency failed")
 
     def release(self, lease: Lease, status: str) -> None:
-        if status not in ("succeeded", "failed", "paused"):
+        if status not in ("succeeded", "failed", "paused", "waiting"):
             raise ValueError(f"invalid release status: {status}")
         with self.transaction():
             self._fence(lease)
@@ -555,6 +643,34 @@ class Store:
                     "UPDATE tasks SET status='pending' WHERE run_id=? AND status='running'",
                     (lease.run_id,),
                 )
+            if status == "waiting":
+                # A signal can arrive between scheduling and lease release.
+                manifest = self.run(lease.run_id)["manifest"]
+                ready = {
+                    t["name"]
+                    for t in manifest["tasks"]
+                    if t.get("wait_for")
+                    and self.db.execute(
+                        "SELECT 1 FROM signals WHERE run_id=? AND name=?",
+                        (lease.run_id, t["wait_for"]),
+                    ).fetchone()
+                }
+                woke = 0
+                for name in ready:
+                    woke += self.db.execute(
+                        """UPDATE tasks SET status='pending'
+                        WHERE run_id=? AND name=? AND status='waiting'""",
+                        (lease.run_id, name),
+                    ).rowcount
+                states = self.tasks(lease.run_id)
+                runnable_signal = any(
+                    t["name"] in ready
+                    and states[t["name"]]["status"] == "pending"
+                    and all(states[dep]["status"] == "succeeded" for dep in t["needs"])
+                    for t in manifest["tasks"]
+                )
+                if woke or runnable_signal:
+                    status = "pending"
             self.db.execute(
                 "UPDATE runs SET status=?,owner=NULL,lease_until=0,updated_at=? WHERE id=?",
                 (status, now, lease.run_id),

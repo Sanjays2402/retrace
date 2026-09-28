@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 — 2026-09-28
+
+- Add durable one-shot signals and task wait gates. Waiting runs release their worker lease;
+  a signal wakes the run without losing completed checkpoints.
+- Handle signal-before-wait delivery, duplicate delivery, and the release race transactionally.
+- Show waiting tasks in the local inspector and add a CLI signal command and approval example.
+
 ## 0.7.1 — 2026-09-28
 
 - Add a worker-epoch view to the local inspector so ownership handoffs, retries, and

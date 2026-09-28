@@ -53,6 +53,7 @@ class Context:
     attempt: int
     input: Any
     dependencies: Mapping[str, Any]
+    signal: Any = None
 
     @property
     def idempotency_key(self) -> str:
@@ -67,6 +68,7 @@ class Task:
     needs: tuple[str, ...] = ()
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout: float = 60.0
+    wait_for: str | None = None
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -75,6 +77,8 @@ class Task:
             raise TypeError(f"{self.name}: task function must be async")
         if not math.isfinite(self.timeout) or self.timeout <= 0:
             raise ValueError("timeout must be finite and positive")
+        if self.wait_for is not None and not _NAME.fullmatch(self.wait_for):
+            raise ValueError(f"{self.name}: invalid signal name: {self.wait_for!r}")
         object.__setattr__(self, "needs", tuple(self.needs))
         if len(set(self.needs)) != len(self.needs):
             raise ValueError(f"{self.name}: duplicate dependencies")
@@ -118,6 +122,7 @@ class Workflow:
                     "max_attempts": t.retry.max_attempts,
                     "initial_delay": t.retry.initial_delay,
                     "max_delay": t.retry.max_delay,
+                    **({"wait_for": t.wait_for} if t.wait_for is not None else {}),
                 }
                 for t in sorted(self.tasks, key=lambda task: task.name)
             ],

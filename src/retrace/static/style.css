@@ -367,6 +367,7 @@ p {
   background: #e8f3f7;
 }
 .badge.retrying,
+.badge.waiting,
 .badge.paused,
 .badge.interrupted {
   color: #946b1b;
@@ -496,6 +497,10 @@ p {
 .node.retrying {
   border-color: #d9b76b;
 }
+.node.waiting {
+  border-color: #b695da;
+  background: #f6f1fb;
+}
 .node.cancelled {
   border-color: #a99bb7;
 }
@@ -525,6 +530,9 @@ p {
 }
 .legend-dot.retrying {
   background: #ca9e3a;
+}
+.legend-dot.waiting {
+  background: #a27acb;
 }
 .legend-dot.cancelled {
   background: #8e7a9e;
