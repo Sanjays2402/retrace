@@ -1115,3 +1115,320 @@ button,
   overflow: auto;
   background: white;
 }
+
+/* The playground uses the same restrained palette as the inspector, with a
+   brighter hero and clearer interactive surfaces. */
+body {
+  background:
+    radial-gradient(ellipse 760px 480px at 75% -160px, #dcebcf 0%, transparent 75%),
+    var(--paper);
+}
+.sidebar {
+  background: linear-gradient(165deg, #163a30 0%, #102c27 70%, #0b211f 100%);
+  box-shadow: 8px 0 32px #0d2f2512;
+}
+.intro {
+  padding-top: 47px;
+  padding-bottom: 39px;
+}
+.intro h1 {
+  font-size: clamp(44px, 4.4vw, 68px);
+  letter-spacing: -0.055em;
+}
+.intro h1 span {
+  color: #447348;
+}
+.intro-note {
+  border-left: 2px solid #9ec88a;
+  background: #ffffffad;
+  padding: 16px 22px;
+  border-radius: 0 10px 10px 0;
+}
+.lab {
+  border-color: #cbdcc7;
+  box-shadow: 0 20px 60px #17352912, 0 2px 8px #17352908;
+}
+.lab-heading {
+  background: linear-gradient(120deg, #fff 60%, #f1f8ea);
+}
+.metrics {
+  background: #fbfdf9;
+}
+.metrics strong {
+  color: #214d3c;
+}
+.node {
+  box-shadow: 0 5px 15px #1735290d;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+.node:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px #1735291c;
+}
+.node.selected {
+  outline-color: #397348;
+}
+.primary {
+  background: #1c6549;
+  border-color: #1c6549;
+  color: #fff;
+  box-shadow: 0 4px 12px #1c65492b;
+}
+.primary:hover:not(:disabled) {
+  background: #14563d;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 19px;
+}
+.topbar-actions > a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: #e6efe1;
+  border-color: #d4e3cd;
+  color: #2d6145;
+}
+.theme-toggle:hover:not(:disabled) {
+  background: #d6e9cb;
+}
+.ownership {
+  box-shadow: 0 10px 30px #1735290b;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #ebf4e9;
+  --muted: #b2c5b8;
+  --border: #355248;
+  --paper: #0e1b19;
+  --accent: #a4d87d;
+  --background: #172823;
+  --foreground: #ebf4e9;
+}
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 780px 490px at 75% -160px, #284d3888 0%, transparent 76%),
+    var(--paper);
+}
+:root[data-theme="dark"] .sidebar {
+  background: linear-gradient(165deg, #132d28, #0c201e 78%);
+  border-right: 1px solid #355248;
+}
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .breadcrumb,
+:root[data-theme="dark"] .intro p:not(.eyebrow),
+:root[data-theme="dark"] .intro-note p,
+:root[data-theme="dark"] .ownership-head p:not(.eyebrow),
+:root[data-theme="dark"] .install p:not(.eyebrow) {
+  color: #b7cbbd;
+}
+:root[data-theme="dark"] .intro h1 span,
+:root[data-theme="dark"] .eyebrow,
+:root[data-theme="dark"] .ownership-head a {
+  color: #a8df8a;
+}
+:root[data-theme="dark"] .intro-note,
+:root[data-theme="dark"] .lab-heading,
+:root[data-theme="dark"] .metrics,
+:root[data-theme="dark"] .lab,
+:root[data-theme="dark"] .detail-grid,
+:root[data-theme="dark"] .queue-features > div,
+:root[data-theme="dark"] .ownership-card:not(.ledger) {
+  background: #172823;
+  border-color: #355248;
+}
+:root[data-theme="dark"] .intro-note {
+  border-left-color: #76aa72;
+}
+:root[data-theme="dark"] .lab {
+  box-shadow: 0 24px 65px #030e0d66;
+}
+:root[data-theme="dark"] .metrics strong,
+:root[data-theme="dark"] .breadcrumb strong,
+:root[data-theme="dark"] .ownership-card strong,
+:root[data-theme="dark"] .queue-features strong {
+  color: #edf7e9;
+}
+:root[data-theme="dark"] .canvas {
+  background-color: #13221f;
+  background-image: radial-gradient(#355248 0.65px, transparent 0.65px);
+}
+:root[data-theme="dark"] .node {
+  background: #1d322b;
+  border-color: #456052;
+  color: #eff8ec;
+  box-shadow: 0 5px 15px #06171350;
+}
+:root[data-theme="dark"] .node:hover {
+  box-shadow: 0 10px 24px #061713a0;
+}
+:root[data-theme="dark"] .node.committed {
+  background: #23432c;
+  border-color: #729b62;
+}
+:root[data-theme="dark"] .node.running {
+  background: #203649;
+  border-color: #668bb1;
+}
+:root[data-theme="dark"] .node.interrupted {
+  background: #483325;
+  border-color: #b8875a;
+}
+:root[data-theme="dark"] .node-icon,
+:root[data-theme="dark"] .node.committed .node-status {
+  color: #b6e397;
+}
+:root[data-theme="dark"] .node.interrupted .node-status {
+  color: #f2ba87;
+}
+:root[data-theme="dark"] .node-number,
+:root[data-theme="dark"] .node-status,
+:root[data-theme="dark"] .canvas-caption,
+:root[data-theme="dark"] .caption-end,
+:root[data-theme="dark"] .legend,
+:root[data-theme="dark"] .metrics span,
+:root[data-theme="dark"] .metrics small,
+:root[data-theme="dark"] .lab-heading .eyebrow,
+:root[data-theme="dark"] .panel-heading .eyebrow,
+:root[data-theme="dark"] .event-number,
+:root[data-theme="dark"] .ownership-label,
+:root[data-theme="dark"] .description,
+:root[data-theme="dark"] .attempt-list,
+:root[data-theme="dark"] .disclosure,
+:root[data-theme="dark"] .ownership-foot,
+:root[data-theme="dark"] footer {
+  color: #abc0ad;
+}
+:root[data-theme="dark"] .ownership-icon,
+:root[data-theme="dark"] .queue-features svg {
+  color: #aad18f;
+}
+:root[data-theme="dark"] .playback,
+:root[data-theme="dark"] .export-panel {
+  background: #1b3028;
+}
+:root[data-theme="dark"] .playback.crashed {
+  background: #382b21;
+}
+:root[data-theme="dark"] button:not(.node):not(.primary),
+:root[data-theme="dark"] .filter-button {
+  background: #24392f;
+  border-color: #486154;
+  color: #e4f0df;
+}
+:root[data-theme="dark"] button:hover:not(:disabled):not(.node):not(.primary) {
+  background: #31503c;
+  border-color: #85b477;
+}
+:root[data-theme="dark"] .quiet,
+:root[data-theme="dark"] .detail-tabs button {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+:root[data-theme="dark"] .detail-tabs button[data-active] {
+  border-bottom-color: #a4d87d !important;
+  color: #c9efa9;
+}
+:root[data-theme="dark"] .detail-tabs button:not([data-active]) {
+  color: #b2c5b8;
+}
+:root[data-theme="dark"] .theme-toggle {
+  background: #294a38 !important;
+  color: #d0f3ad !important;
+}
+:root[data-theme="dark"] .badge,
+:root[data-theme="dark"] .sample-pill {
+  background: #31503c;
+  color: #cef0b3;
+}
+:root[data-theme="dark"] .badge.running {
+  background: #25425e;
+  color: #bcdcff;
+}
+:root[data-theme="dark"] .badge.interrupted {
+  background: #573b29;
+  color: #ffd0a0;
+}
+:root[data-theme="dark"] .badge.succeeded {
+  background: #284b31;
+  color: #c2eba5;
+}
+:root[data-theme="dark"] pre,
+:root[data-theme="dark"] .export-panel pre {
+  background: #10201d;
+  border-color: #3a584b;
+  color: #bfe5a6;
+}
+:root[data-theme="dark"] .journal-event {
+  border-left-color: #4a6753;
+}
+:root[data-theme="dark"] .journal-event strong {
+  color: #bce39c;
+}
+:root[data-theme="dark"] .journal-event.warn strong {
+  color: #f2bd8b;
+}
+:root[data-theme="dark"] .journal-event p,
+:root[data-theme="dark"] .journal-event time,
+:root[data-theme="dark"] .journal-foot,
+:root[data-theme="dark"] .mono,
+:root[data-theme="dark"] .attempt-info,
+:root[data-theme="dark"] .queue-features small,
+:root[data-theme="dark"] .ownership-card small {
+  color: #adc2b0;
+}
+:root[data-theme="dark"] .ownership {
+  background: linear-gradient(135deg, #1b3228, #152922);
+  border-color: #3c5c49;
+  box-shadow: 0 10px 35px #03120d66;
+}
+:root[data-theme="dark"] .ownership-card.ledger {
+  background: #294b37;
+  border-color: #608b5d;
+}
+:root[data-theme="dark"] .ownership-card.lost {
+  background: #3c3026;
+  border-color: #a07956;
+}
+:root[data-theme="dark"] .ownership-card.owns {
+  background: #24402b;
+  border-color: #76a16a;
+}
+:root[data-theme="dark"] .terminal {
+  background: #0b1716;
+  border: 1px solid #355248;
+}
+:root[data-theme="dark"] .terminal code {
+  color: #d3efbf;
+}
+@media (max-width: 600px) {
+  .intro {
+    padding-top: 29px;
+    padding-bottom: 28px;
+  }
+  .intro h1 {
+    font-size: clamp(38px, 9vw, 48px);
+  }
+  .topbar-actions {
+    gap: 11px;
+  }
+  .topbar-actions > a {
+    font-size: 0;
+  }
+  .theme-toggle {
+    width: 34px;
+    height: 34px;
+  }
+}

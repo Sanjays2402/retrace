@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Refresh the public playground theme with clearer visual hierarchy and responsive spacing.
+- Add a dark theme switch that follows the system preference and saves the visitor's choice.
+
 ## 0.6.0 — 2026-09-27
 
 - Add durable, idempotent cancellation for queued, running, and paused runs via Python and CLI.

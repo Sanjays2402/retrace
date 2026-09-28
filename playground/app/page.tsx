@@ -20,6 +20,8 @@ import {
   Server,
   LockKeyhole,
   Clock3,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { snapshot, nextPhase } from "@/lib/recovery";
@@ -35,8 +37,35 @@ export default function Home() {
     [onlySelected, setOnlySelected] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const run = snapshot(phase),
     task = run.tasks[selected];
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem("retrace-theme");
+    } catch {
+      // Private browsing can disable storage; the theme still works for this visit.
+    }
+    const preferred =
+      saved === "light" || saved === "dark"
+        ? saved
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+    setTheme(preferred);
+    document.documentElement.dataset.theme = preferred;
+  }, []);
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("retrace-theme", next);
+    } catch {
+      // Keep the visible theme when storage is unavailable.
+    }
+  }
   useEffect(() => {
     if (!playing) return;
     if (phase === 4 || phase === 7) {
@@ -190,9 +219,20 @@ export default function Home() {
             Playground <ChevronRight size={14} />
             <strong>Recovery lab</strong>
           </div>
-          <a href={repo}>
-            Star on GitHub <ArrowUpRight size={15} />
-          </a>
+          <div className="topbar-actions">
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+              title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+            >
+              {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
+            <a href={repo} aria-label="View Retrace on GitHub">
+              Star on GitHub <ArrowUpRight size={15} />
+            </a>
+          </div>
         </header>
         <section className="intro">
           <div>
