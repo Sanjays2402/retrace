@@ -1991,3 +1991,15 @@ body {
 :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-actions button { background: color-mix(in srgb, var(--tone-bright) 14%, var(--tone-deep)); border-color: var(--tone-mid); color: #fff; }
 :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tone-bright) 30%, var(--tone-deep)); }
 @media (max-width: 600px) { .palette-control { gap: 5px; padding: 5px 6px; } .palette-control > svg { display: none; } .topbar-actions { gap: 7px; } }
+:root[data-accent]:not([data-accent="green"]) .lab-heading { background: linear-gradient(120deg, #fff 60%, var(--tone-soft)); }
+:root[data-accent]:not([data-accent="green"]) .metrics { background: color-mix(in srgb, var(--tone-soft) 65%, white); }
+:root[data-accent]:not([data-accent="green"]) .metrics strong { color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .theme-toggle { background: var(--tone-soft-strong); border-color: var(--tone-border); color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .theme-toggle:hover:not(:disabled) { background: var(--tone-bright); }
+:root[data-accent]:not([data-accent="green"]) .badge:not(.running):not(.interrupted) { background: var(--tone-soft-strong); color: var(--tone-ink); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .lab, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .lab-heading, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .metrics, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .detail-grid, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .queue-features > div, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-flow, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-console { background: color-mix(in srgb, var(--tone-deep) 48%, #142320); border-color: var(--border); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .canvas { background-color: var(--tone-darker); background-image: radial-gradient(var(--border) .65px, transparent .65px); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .metrics strong { color: #f1f6f5; }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .theme-toggle { background: color-mix(in srgb, var(--tone-bright) 20%, var(--tone-deep)) !important; border-color: var(--tone-mid); color: var(--tone-on-dark) !important; }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .hero-secondary { background: var(--tone-deep); border-color: var(--tone-mid); color: #fff; }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .badge:not(.running):not(.interrupted) { background: color-mix(in srgb, var(--tone-bright) 19%, var(--tone-deep)); color: var(--tone-on-dark); }
