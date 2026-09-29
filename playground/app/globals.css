@@ -1914,3 +1914,80 @@ body {
     margin-top: 30px;
   }
 }
+
+/* User-selectable palettes. Green intentionally uses the original styling. */
+.palette-control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: #ffffffb0;
+  color: var(--muted);
+}
+.palette-control .palette-swatch {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--swatch) !important;
+  box-shadow: 0 0 0 1px #87988a66;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.palette-control .palette-swatch:hover { transform: scale(1.12); }
+.palette-control .palette-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--paper); }
+.palette-swatch.green { --swatch: #b8e87f; }
+.palette-swatch.red { --swatch: #f19a9b; }
+.palette-swatch.yellow { --swatch: #f5d869; }
+.palette-swatch.blue { --swatch: #8dcbf5; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.journal-search { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: #ffffffa8; }
+.journal-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.journal-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 12px; }
+.journal-search input::placeholder { color: var(--muted); }
+.journal-search + .journal-list { height: 207px; margin-top: 12px; }
+:root[data-theme="dark"] .palette-control, :root[data-theme="dark"] .journal-search { background: #24392f; border-color: #486154; }
+
+:root[data-accent="red"] { --tone-deep: #3d252b; --tone-darker: #261b20; --tone-bright: #ffaaa3; --tone-mid: #a54b58; --tone-soft: #fff1ef; --tone-soft-strong: #f6dcda; --tone-border: #e5c4c5; --tone-ink: #64343e; --tone-on-dark: #ffc9c3; --logo-filter: hue-rotate(-95deg); }
+:root[data-accent="yellow"] { --tone-deep: #41371e; --tone-darker: #29251a; --tone-bright: #f6db77; --tone-mid: #8c6e25; --tone-soft: #fff9e9; --tone-soft-strong: #f5eabf; --tone-border: #e7dba9; --tone-ink: #57451c; --tone-on-dark: #ffe58d; --logo-filter: hue-rotate(-35deg); }
+:root[data-accent="blue"] { --tone-deep: #1d3a4d; --tone-darker: #122836; --tone-bright: #9ed7ff; --tone-mid: #3d769e; --tone-soft: #eef8ff; --tone-soft-strong: #d7eafa; --tone-border: #bcd6e7; --tone-ink: #28536f; --tone-on-dark: #b9e3ff; --logo-filter: hue-rotate(120deg); }
+:root[data-accent]:not([data-accent="green"]) { --ink: #25302e; --muted: #5e6a67; --border: var(--tone-border); --paper: var(--tone-soft); --accent: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) body { background: radial-gradient(ellipse 900px 580px at 72% -100px, var(--tone-soft-strong) 0%, transparent 72%), var(--paper); }
+:root[data-accent]:not([data-accent="green"]) .sidebar { background: linear-gradient(175deg, var(--tone-deep), var(--tone-darker)); border-color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .brand img, :root[data-accent]:not([data-accent="green"]) .mobile-brand img { filter: var(--logo-filter); }
+:root[data-accent]:not([data-accent="green"]) .brand span, :root[data-accent]:not([data-accent="green"]) .nav-item.active { background: color-mix(in srgb, var(--tone-bright) 18%, var(--tone-deep)); border-color: color-mix(in srgb, var(--tone-bright) 34%, var(--tone-deep)); color: #fff; }
+:root[data-accent]:not([data-accent="green"]) .live-dot, :root[data-accent]:not([data-accent="green"]) .trace-pulse { background: var(--tone-bright); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone-bright) 25%, transparent); }
+:root[data-accent]:not([data-accent="green"]) .intro .eyebrow, :root[data-accent]:not([data-accent="green"]) .intro h1 span, :root[data-accent]:not([data-accent="green"]) .ownership-head a, :root[data-accent]:not([data-accent="green"]) .signal-header > a { color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .hero-primary { background: var(--tone-bright); color: var(--tone-deep); box-shadow: 0 7px 18px color-mix(in srgb, var(--tone-mid) 28%, transparent); }
+:root[data-accent]:not([data-accent="green"]) .hero-trace, :root[data-accent]:not([data-accent="green"]) .terminal { background: var(--tone-darker); border-color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .hero-trace::before { background: color-mix(in srgb, var(--tone-bright) 28%, transparent); }
+:root[data-accent]:not([data-accent="green"]) .trace-icon, :root[data-accent]:not([data-accent="green"]) .trace-line.recovered .trace-icon { background: var(--tone-bright); color: var(--tone-deep); }
+:root[data-accent]:not([data-accent="green"]) .hero-trace-foot, :root[data-accent]:not([data-accent="green"]) .terminal code, :root[data-accent]:not([data-accent="green"]) .terminal-heading > span { color: var(--tone-on-dark); }
+:root[data-accent]:not([data-accent="green"]) .intro-proof svg, :root[data-accent]:not([data-accent="green"]) .eyebrow, :root[data-accent]:not([data-accent="green"]) .queue-features svg { color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .lab, :root[data-accent]:not([data-accent="green"]) .signal-lab { border-color: var(--tone-border); }
+:root[data-accent]:not([data-accent="green"]) .signal-lab, :root[data-accent]:not([data-accent="green"]) .ownership, :root[data-accent]:not([data-accent="green"]) .install { background: linear-gradient(135deg, var(--tone-soft), var(--tone-soft-strong)); border-color: var(--tone-border); }
+:root[data-accent]:not([data-accent="green"]) .node.selected { outline-color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .node.committed, :root[data-accent]:not([data-accent="green"]) .signal-step.done, :root[data-accent]:not([data-accent="green"]) .ownership-card.owns { background: var(--tone-soft); border-color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .node-icon, :root[data-accent]:not([data-accent="green"]) .node.committed .node-status, :root[data-accent]:not([data-accent="green"]) .connector.complete { color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .status-dot.committed, :root[data-accent]:not([data-accent="green"]) .signal-state span, :root[data-accent]:not([data-accent="green"]) .signal-worker-light { background: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .playback, :root[data-accent]:not([data-accent="green"]) .signal-step-icon, :root[data-accent]:not([data-accent="green"]) .signal-console code, :root[data-accent]:not([data-accent="green"]) .signal-footnote code { background: var(--tone-soft); color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .primary, :root[data-accent]:not([data-accent="green"]) .ownership-card.ledger { background: var(--tone-deep); border-color: var(--tone-deep); color: #fff; }
+:root[data-accent]:not([data-accent="green"]) .primary:hover:not(:disabled) { background: var(--tone-darker); }
+:root[data-accent]:not([data-accent="green"]) .badge.succeeded, :root[data-accent]:not([data-accent="green"]) .sample-pill, :root[data-accent]:not([data-accent="green"]) .signal-state { background: var(--tone-soft-strong); color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .detail-tabs button[data-active], :root[data-accent]:not([data-accent="green"]) .journal-event strong, :root[data-accent]:not([data-accent="green"]) .signal-inbox strong { color: var(--tone-ink); border-color: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .phase-rail button.current span, :root[data-accent]:not([data-accent="green"]) .phase-rail button.passed span { background: var(--tone-mid); }
+:root[data-accent]:not([data-accent="green"]) .signal-actions button { background: var(--tone-soft-strong); border-color: var(--tone-border); color: var(--tone-ink); }
+:root[data-accent]:not([data-accent="green"]) .signal-actions button:hover:not(:disabled) { background: var(--tone-bright); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) { --ink: #f0f2f1; --muted: #bac3c1; --paper: var(--tone-darker); --border: color-mix(in srgb, var(--tone-mid) 45%, #172823); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .intro .eyebrow, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .intro h1 span, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .eyebrow, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .ownership-head a, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-header > a { color: var(--tone-on-dark); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-lab, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .ownership, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .install { background: color-mix(in srgb, var(--tone-deep) 55%, #111b1a); border-color: var(--border); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .node.committed, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-step.done, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .ownership-card.owns { background: color-mix(in srgb, var(--tone-deep) 78%, #152723); border-color: var(--tone-mid); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .node-icon, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .node.committed .node-status, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .connector.complete, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .detail-tabs button[data-active], :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .journal-event strong, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-inbox strong { color: var(--tone-on-dark); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .playback, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-step-icon, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-console code, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-footnote code { background: color-mix(in srgb, var(--tone-deep) 70%, #172823); color: var(--tone-on-dark); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .badge.succeeded, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .sample-pill, :root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-state { background: color-mix(in srgb, var(--tone-bright) 22%, var(--tone-deep)); color: var(--tone-on-dark); }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-actions button { background: color-mix(in srgb, var(--tone-bright) 14%, var(--tone-deep)); border-color: var(--tone-mid); color: #fff; }
+:root[data-theme="dark"][data-accent]:not([data-accent="green"]) .signal-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tone-bright) 30%, var(--tone-deep)); }
+@media (max-width: 600px) { .palette-control { gap: 5px; padding: 5px 6px; } .palette-control > svg { display: none; } .topbar-actions { gap: 7px; } }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { snapshot, nextPhase } from "../lib/recovery.ts";
+import { snapshot, nextPhase, filterJournal } from "../lib/recovery.ts";
 
 test("recovery reuses committed tasks and reruns interrupted summary", () => {
   const stopped = snapshot(4);
@@ -34,4 +34,15 @@ test("snapshots only expose outputs after a checkpoint commits", () => {
       assert.equal(task.output !== null, task.status === "committed");
     }
   }
+});
+
+test("journal search combines event text with the selected step", () => {
+  const entries = snapshot(7).events;
+  assert.equal(filterJournal(entries, null, "worker").length, 2);
+  assert.deepEqual(
+    filterJournal(entries, "summarize", "worker").map((event) => event.kind),
+    ["worker.interrupted", "run.claimed"],
+  );
+  assert.equal(filterJournal(entries, "extract", "  WORKER  ").length, 0);
+  assert.equal(filterJournal(entries, null, "").length, entries.length);
 });

@@ -22,9 +22,11 @@ import {
   Clock3,
   Moon,
   Sun,
+  Palette,
+  Search,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { snapshot, nextPhase } from "@/lib/recovery";
+import { snapshot, nextPhase, filterJournal } from "@/lib/recovery";
 import { SignalLab } from "@/app/signal-lab";
 const repo = "https://github.com/Sanjays2402/retrace";
 const command =
@@ -41,6 +43,8 @@ const phaseLabels = [
   "Run completed",
 ];
 const phaseFocus = [0, 0, 0, 1, 2, 2, 2, 3];
+const accentChoices = ["green", "red", "yellow", "blue"] as const;
+type Accent = (typeof accentChoices)[number];
 export default function Home() {
   const [phase, setPhase] = useState(0),
     [selected, setSelected] = useState(0),
@@ -50,6 +54,8 @@ export default function Home() {
   const [showExport, setShowExport] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [accent, setAccent] = useState<Accent>("green");
+  const [journalQuery, setJournalQuery] = useState("");
   const run = snapshot(phase),
     task = run.tasks[selected];
   useEffect(() => {
@@ -67,7 +73,25 @@ export default function Home() {
           : "light";
     setTheme(preferred);
     document.documentElement.dataset.theme = preferred;
+    try {
+      const savedAccent = localStorage.getItem("retrace-accent");
+      if (accentChoices.some((choice) => choice === savedAccent)) {
+        setAccent(savedAccent as Accent);
+        document.documentElement.dataset.accent = savedAccent as Accent;
+      }
+    } catch {
+      // The palette still works for this visit when storage is unavailable.
+    }
   }, []);
+  function chooseAccent(next: Accent) {
+    setAccent(next);
+    document.documentElement.dataset.accent = next;
+    try {
+      localStorage.setItem("retrace-accent", next);
+    } catch {
+      // The selected palette remains active for this visit.
+    }
+  }
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
     setTheme(next);
@@ -188,8 +212,10 @@ export default function Home() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
-  const journal = run.events.filter(
-    (e) => !onlySelected || e.task === task.key,
+  const journal = filterJournal(
+    run.events,
+    onlySelected ? task.key : null,
+    journalQuery,
   );
   return (
     <main className="shell">
@@ -249,6 +275,20 @@ export default function Home() {
             <strong>Recovery lab</strong>
           </div>
           <div className="topbar-actions">
+            <div className="palette-control" role="group" aria-label="Accent color">
+              <Palette size={15} aria-hidden="true" />
+              {accentChoices.map((choice) => (
+                <button
+                  key={choice}
+                  className={`palette-swatch ${choice}`}
+                  type="button"
+                  aria-label={`${choice[0].toUpperCase()}${choice.slice(1)} theme`}
+                  aria-pressed={accent === choice}
+                  title={`${choice[0].toUpperCase()}${choice.slice(1)} theme`}
+                  onClick={() => chooseAccent(choice)}
+                />
+              ))}
+            </div>
             <button
               className="theme-toggle"
               type="button"
@@ -582,6 +622,16 @@ export default function Home() {
                   {onlySelected ? "Selected step" : "All steps"}
                 </button>
               </div>
+              <label className="journal-search">
+                <Search size={15} aria-hidden="true" />
+                <span className="sr-only">Search events</span>
+                <input
+                  type="search"
+                  value={journalQuery}
+                  onChange={(event) => setJournalQuery(event.target.value)}
+                  placeholder="Search events"
+                />
+              </label>
               <div className="journal-list">
                 {journal.length ? (
                   journal
@@ -600,7 +650,11 @@ export default function Home() {
                       </div>
                     ))
                 ) : (
-                  <p className="empty">No events for this step yet.</p>
+                  <p className="empty">
+                    {journalQuery.trim()
+                      ? "No events match your search."
+                      : "No events for this step yet."}
+                  </p>
                 )}
               </div>
               <p className="journal-foot">

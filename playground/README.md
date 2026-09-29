@@ -34,6 +34,10 @@ Open `http://127.0.0.1:4173/retrace/`.
 - Advance one event, jump along the event rail, autoplay to the crash, resume, or replay.
 - Inspect successful checkpoints and the interrupted/retried attempt history.
 - Filter the event journal to a selected step.
+- Search event names, descriptions, task keys, and sample timestamps; combine search with
+  the selected-step filter.
+- Choose green, red, yellow, or blue palettes independently of light/dark mode. Preferences
+  are saved in browser storage when available.
 - Preview, copy, or download a synthetic JSON snapshot. Uncommitted outputs are null.
 - Follow a worker handoff diagram and try the durable-signals lab: start a run, deliver an
   approval before or after it waits, then resume a worker. The browser does not enqueue runs.

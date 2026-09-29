@@ -141,3 +141,18 @@ export function nextPhase(phase: number) {
   snapshot(phase);
   return Math.min(7, phase + 1);
 }
+
+export function filterJournal(
+  entries: typeof events,
+  taskKey: string | null,
+  query: string,
+) {
+  const needle = query.trim().toLocaleLowerCase();
+  return entries.filter((entry) => {
+    if (taskKey !== null && entry.task !== taskKey) return false;
+    if (!needle) return true;
+    return [entry.kind, entry.task, entry.text, entry.time].some((field) =>
+      field.toLocaleLowerCase().includes(needle),
+    );
+  });
+}

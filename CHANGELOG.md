@@ -10,6 +10,9 @@
   the demo, and an accessible event rail for jumping between recovery phases.
 - Add an interactive durable-signals lab showing wait, early delivery, worker release, and resume.
 - Refine the Retrace mark across the website, favicon, and local inspector.
+- Add selectable red, yellow, and blue website palettes while retaining the original green,
+  with independent light/dark preference and local persistence.
+- Add search to the recovery event journal, combinable with the selected-step filter.
 
 ## 0.7.1 — 2026-09-28
 
