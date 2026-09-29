@@ -1046,6 +1046,76 @@ footer a {
     font-size: 12px;
   }
 }
+
+.signal-lab {
+  margin: 30px 0 42px;
+  padding: clamp(23px, 3vw, 36px);
+  border: 1px solid #cbdcc7;
+  border-radius: 18px;
+  background: #f7faf4;
+}
+.signal-header { display: flex; justify-content: space-between; align-items: end; gap: 28px; margin-bottom: 26px; }
+.signal-header h2 { margin: 8px 0 9px; font-size: clamp(30px, 3vw, 42px); line-height: 1.1; letter-spacing: -.055em; }
+.signal-header p:not(.eyebrow) { max-width: 650px; margin: 0; color: #53675b; line-height: 1.6; }
+.signal-header > a { display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; color: #285d45; font-weight: 750; text-decoration: none; }
+.signal-header > a:hover { text-decoration: underline; }
+.signal-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .8fr); gap: 16px; }
+.signal-flow, .signal-console { border-radius: 13px; border: 1px solid #d7e3d2; background: #fff; overflow: hidden; }
+.signal-flow-top, .signal-console-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 17px 20px; border-bottom: 1px solid #e3ebdf; font-size: 11px; font-weight: 800; letter-spacing: .09em; color: #5b6f61; }
+.signal-state { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 99px; background: #eef4e9; color: #3a6245; letter-spacing: 0; font-size: 11px; }
+.signal-state span, .signal-worker-light { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #61a66e; }
+.signal-state.waiting { background: #fff0dd; color: #8d5c29; }
+.signal-state.waiting span, .signal-worker-light.idle { background: #d99a55; }
+.signal-path { display: flex; align-items: stretch; padding: 29px 20px; }
+.signal-step { flex: 1; min-width: 0; min-height: 125px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 15px; border: 1px solid #dce6d9; border-radius: 11px; background: #fafcf9; color: #53665a; }
+.signal-step.done { background: #f0f8eb; border-color: #a8cea1; color: #254e38; }
+.signal-step.active { background: #fff8ec; border-color: #e2bd82; color: #76512b; }
+.signal-step-icon { display: inline-grid; place-items: center; width: 31px; height: 31px; border-radius: 8px; background: #e8f0e5; }
+.signal-step.active .signal-step-icon { background: #f8e7cb; }
+.signal-step small { display: block; font-size: 10px; font-weight: 800; letter-spacing: .07em; opacity: .75; }
+.signal-step strong { display: block; margin-top: 4px; font-size: 14px; color: #1d3328; }
+.signal-step > svg { align-self: flex-end; margin-top: -29px; color: #3e8c56; }
+.signal-connector { align-self: center; width: 22px; height: 2px; flex: 0 0 22px; background: #abc5aa; }
+.signal-worker { display: flex; gap: 8px; align-items: center; padding: 14px 20px; border-top: 1px solid #e3ebdf; color: #53675b; font-size: 12px; }
+.signal-console { padding-bottom: 15px; }
+.signal-console-head { margin-bottom: 15px; }
+.signal-console > p, .signal-inbox, .signal-actions, .signal-reset { margin-left: 19px; margin-right: 19px; }
+.signal-console > p { color: #53675b; font-size: 13px; line-height: 1.5; }
+.signal-console code, .signal-footnote code { padding: 2px 5px; border-radius: 4px; background: #e8f0e5; color: #1f5a3a; }
+.signal-inbox { display: flex; justify-content: space-between; gap: 10px; padding: 12px; border: 1px dashed #b6cdb1; border-radius: 9px; color: #607263; font-size: 12px; }
+.signal-inbox strong { color: #285c3e; }
+.signal-actions { display: grid; gap: 8px; margin-top: 16px; }
+.signal-actions button { display: flex; gap: 9px; align-items: center; justify-content: center; min-height: 37px; border: 1px solid #9fbc9f; border-radius: 7px; background: #e9f2e6; color: #204934; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.signal-actions button:hover:not(:disabled) { background: #d9ebd4; }
+.signal-actions button:disabled { opacity: .43; cursor: not-allowed; }
+.signal-reset { display: flex; align-items: center; gap: 6px; margin-top: 14px; border: 0; background: transparent; color: #53675b; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.signal-reset:hover { color: #1e4c36; }
+.signal-footnote { margin: 15px 0 0; color: #637267; font-size: 11px; }
+:root[data-theme="dark"] .signal-lab { background: #172b22; border-color: #42634c; }
+:root[data-theme="dark"] .signal-header p:not(.eyebrow), :root[data-theme="dark"] .signal-header > a { color: #b0c9b0; }
+:root[data-theme="dark"] .signal-flow, :root[data-theme="dark"] .signal-console { background: #20372b; border-color: #42634c; }
+:root[data-theme="dark"] .signal-flow-top, :root[data-theme="dark"] .signal-console-head, :root[data-theme="dark"] .signal-worker { border-color: #42634c; color: #b0c9b0; }
+:root[data-theme="dark"] .signal-step { background: #253d30; border-color: #49634c; color: #b0c9b0; }
+:root[data-theme="dark"] .signal-step.done { background: #294a34; border-color: #6b9461; }
+:root[data-theme="dark"] .signal-step.active { background: #473c2c; border-color: #a7814b; }
+:root[data-theme="dark"] .signal-step strong { color: #edf6e8; }
+:root[data-theme="dark"] .signal-step-icon, :root[data-theme="dark"] .signal-console code, :root[data-theme="dark"] .signal-footnote code { background: #345440; color: #c4edac; }
+:root[data-theme="dark"] .signal-console > p, :root[data-theme="dark"] .signal-footnote { color: #b0c9b0; }
+:root[data-theme="dark"] .signal-inbox { border-color: #5b795b; color: #b0c9b0; }
+:root[data-theme="dark"] .signal-inbox strong { color: #c4edac; }
+:root[data-theme="dark"] .signal-actions button { background: #31543a; border-color: #61846a; color: #e8f3e3; }
+:root[data-theme="dark"] .signal-actions button:hover:not(:disabled) { background: #3e6749; }
+:root[data-theme="dark"] .signal-reset { color: #b0c9b0; }
+@media (max-width: 900px) { .signal-layout { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .signal-header { display: block; }
+  .signal-header > a { margin-top: 14px; }
+  .signal-path { display: grid; padding: 17px; }
+  .signal-step { min-height: 68px; flex-direction: row; align-items: center; }
+  .signal-step > svg { align-self: center; margin: 0 0 0 auto; }
+  .signal-connector { width: 2px; height: 14px; margin-left: 29px; }
+  .signal-flow-top { padding: 14px; }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;

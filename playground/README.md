@@ -35,12 +35,12 @@ Open `http://127.0.0.1:4173/retrace/`.
 - Inspect successful checkpoints and the interrupted/retried attempt history.
 - Filter the event journal to a selected step.
 - Preview, copy, or download a synthetic JSON snapshot. Uncommitted outputs are null.
-- Follow a worker handoff diagram and see how idempotent submission and durable signals fit
-  into the local queue. These explanations are illustrative; the browser does not enqueue runs.
+- Follow a worker handoff diagram and try the durable-signals lab: start a run, deliver an
+  approval before or after it waits, then resume a worker. The browser does not enqueue runs.
 - Optional WebMCP control uses the same validated model. Visible controls work
   without that API.
 
-`lib/recovery.ts` contains the model and validation. `app/page.tsx` provides the
+`lib/recovery.ts` and `lib/signals.ts` contain the simulation models. `app/page.tsx` provides the
 interaction, while `app/globals.css` handles responsive layout and reduced motion.
 The Python engine and local inspector remain separate from this public demo.
 

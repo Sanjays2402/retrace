@@ -1,10 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">Retrace</title>
-  <desc id="desc">A branching R connects durable checkpoints, with a return arrow for recovery.</desc>
-  <rect width="64" height="64" rx="16" fill="#123e35"/>
-  <path d="M19 46V18h17a10 10 0 0 1 0 20H19m13 0 13 12" fill="none" stroke="#d2ef9e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="m25 40-6 6-6-6" fill="none" stroke="#d2ef9e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="19" cy="18" r="5" fill="#f8faed"/>
-  <circle cx="39" cy="19" r="4" fill="#f8faed"/>
-  <circle cx="45" cy="50" r="5" fill="#f8faed"/>
+  <desc id="desc">A checkpoint becomes a continuous recovery path shaped like R.</desc>
+  <rect width="64" height="64" rx="16" fill="#133e34"/>
+  <path d="M19 47V17h15c10 0 15 4 15 11s-5 11-15 11H19" fill="none" stroke="#f3f7e9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m34 39 12 10" fill="none" stroke="#c4ed8d" stroke-width="6" stroke-linecap="round"/>
+  <rect x="15" y="13" width="8" height="8" rx="2" fill="#c4ed8d"/>
+  <path d="m42 49 5 1 1-5" fill="none" stroke="#c4ed8d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

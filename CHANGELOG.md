@@ -8,6 +8,8 @@
 - Show waiting tasks in the local inspector and add a CLI signal command and approval example.
 - Refresh the public recovery lab with a visual trace, responsive hero, direct navigation to
   the demo, and an accessible event rail for jumping between recovery phases.
+- Add an interactive durable-signals lab showing wait, early delivery, worker release, and resume.
+- Refine the Retrace mark across the website, favicon, and local inspector.
 
 ## 0.7.1 — 2026-09-28
 

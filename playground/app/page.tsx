@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { snapshot, nextPhase } from "@/lib/recovery";
+import { SignalLab } from "@/app/signal-lab";
 const repo = "https://github.com/Sanjays2402/retrace";
 const command =
   "python -m pip install git+https://github.com/Sanjays2402/retrace.git";
@@ -206,6 +207,9 @@ export default function Home() {
         <div className="nav-item active">
           <GitBranch size={17} /> Recovery lab <span className="live-dot" />
         </div>
+        <a className="nav-item" href="#signals">
+          <Clock3 size={17} /> Signals lab <ArrowRight size={14} />
+        </a>
         <a
           className="nav-item"
           href={`${repo}/blob/main/docs/getting-started.md`}
@@ -610,6 +614,7 @@ export default function Home() {
           browser. No Python runs, file uploads, or persisted data. Autoplay
           pauses at the crash so you can inspect the checkpoints.
         </p>
+        <SignalLab />
         <section className="ownership" aria-label="Worker ownership model">
           <div className="ownership-head">
             <div>
