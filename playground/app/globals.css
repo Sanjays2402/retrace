@@ -1061,12 +1061,13 @@ footer a {
 .signal-header > a:hover { text-decoration: underline; }
 .signal-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .8fr); gap: 16px; }
 .signal-flow, .signal-console { border-radius: 13px; border: 1px solid #d7e3d2; background: #fff; overflow: hidden; }
+.signal-flow { display: flex; flex-direction: column; }
 .signal-flow-top, .signal-console-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 17px 20px; border-bottom: 1px solid #e3ebdf; font-size: 11px; font-weight: 800; letter-spacing: .09em; color: #5b6f61; }
 .signal-state { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 99px; background: #eef4e9; color: #3a6245; letter-spacing: 0; font-size: 11px; }
 .signal-state span, .signal-worker-light { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #61a66e; }
 .signal-state.waiting { background: #fff0dd; color: #8d5c29; }
 .signal-state.waiting span, .signal-worker-light.idle { background: #d99a55; }
-.signal-path { display: flex; align-items: stretch; padding: 29px 20px; }
+.signal-path { display: flex; flex: 1; align-items: center; padding: 29px 20px; }
 .signal-step { flex: 1; min-width: 0; min-height: 125px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 15px; border: 1px solid #dce6d9; border-radius: 11px; background: #fafcf9; color: #53665a; }
 .signal-step.done { background: #f0f8eb; border-color: #a8cea1; color: #254e38; }
 .signal-step.active { background: #fff8ec; border-color: #e2bd82; color: #76512b; }
