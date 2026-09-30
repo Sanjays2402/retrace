@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore leases, fencing, checkpoints, and scheduling.">
+  <title>Architecture · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link current" href="../architecture/" aria-current="page">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Architecture</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link current" href="../architecture/" aria-current="page">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> UNDER THE HOOD</span><h1>Architecture</h1><p>Explore leases, fencing, checkpoints, and scheduling.</p></div><article class="markdown-body"><p>Retrace is an embedded, single-machine orchestrator. It keeps scheduling, durable storage,
+and observation separate so execution semantics can be tested without a browser or service.</p>
+<pre><code class="language-mermaid">flowchart LR
+    Definition[Versioned Workflow DAG] --&gt; Engine[Async scheduler]
+    CLI[CLI / Python API] --&gt; Engine
+    Queue[Queued runs] --&gt; Workers[Local worker processes]
+    Workers --&gt;|atomic claim| Engine
+    Engine --&gt; Tasks[Concurrent async tasks]
+    Tasks --&gt; Checkpoint[JSON result boundary]
+    Checkpoint --&gt; Store[SQLite transaction]
+    Engine --&gt; Lease[Heartbeat + fenced lease]
+    Lease --&gt; Store
+    Store --&gt; State[(Runs / tasks / attempts)]
+    Store --&gt; Events[(Append-only event journal)]
+    State --&gt; HTTP[Read-only loopback API]
+    Events --&gt; HTTP
+    HTTP --&gt; Inspector[Live inspector]
+</code></pre>
+<h2 id="ownership-protocol">Ownership protocol</h2>
+<ol>
+<li><code>Store.claim</code> enters <code>BEGIN IMMEDIATE</code>, checks the workflow fingerprint, and rejects a live owner.
+   <code>Store.claim_next</code> selects the oldest eligible run of an exact definition and assigns its
+   lease in the same transaction. Competing local worker processes cannot both claim it.</li>
+<li>It increments the run's epoch, assigns a random owner token, and sets an absolute lease deadline.</li>
+<li>Running attempts left by an expired owner become <code>interrupted</code>; their tasks return to <code>pending</code>.</li>
+<li>A heartbeat renews the lease every third of its configured TTL.</li>
+<li>Before <strong>every</strong> task-state write, heartbeat, or release, the transaction checks owner, epoch,
+   and expiry. An old worker cannot commit after a takeover, even if it eventually returns a result.</li>
+<li>Loss of ownership aborts the scheduler and cancels its active coroutines. A running worker
+   pool will poll and reclaim the run after lease expiry; without one, call <code>resume</code> explicitly.</li>
+</ol>
+<p><code>retrace submit</code> persists a pending run, while <code>retrace worker</code> starts a polling process for one
+or more workflow definitions. Each process may own multiple runs, bounded by <code>--max-runs</code>; the task
+concurrency limit applies separately inside each run. <code>--once</code> drains runs available to that
+worker and exits. It does not wait for another process's live lease to expire. The queue is a
+local SQLite table, not a network broker. Each worker uses its own SQLite connection on the
+same machine and local disk. Worker processes require access to the same workflow code; a
+fingerprint mismatch leaves the run untouched.</p>
+<p>For shared pools, <code>Store.claim_next_any</code> inspects the oldest eligible run of each loaded
+definition inside one <code>BEGIN IMMEDIATE</code> transaction. It excludes definitions at their
+configured live-lease cap and chooses the least recently claimed definition using a durable
+monotonic sequence. The same transaction advances that sequence when assigning the lease.
+<code>Store.create</code> checks queue depth under the same write lock before admitting a run, so
+competing producers cannot exceed <code>max_queued</code>. Duplicate keyed submissions are resolved
+before admission. This is equal-share fairness among eligible definitions; a worker must
+load each definition it is expected to serve.</p>
+<p>On SIGTERM, the CLI worker enters a drain phase: it stops claiming runs, waits for owned
+runs to complete up to <code>--drain-timeout</code>, then cancels active coroutines. The engine releases
+unfinished runs as <code>paused</code> and records interrupted attempts. Another local worker can claim
+them immediately. This avoids an unnecessary lease-expiry wait during rolling restarts. A
+hard kill or non-cooperative task still follows the existing lease and at-least-once contract.</p>
+<p>Submission keys and delayed eligibility are persisted on each run. Under <code>BEGIN IMMEDIATE</code>,
+<code>Store.create</code> checks a unique key hash before inserting. A matching workflow and input returns
+the original ID; a conflicting request fails. The first request fixes the schedule. Pending runs
+with <code>ready_at</code> in the future are skipped by the dispatcher; paused and expired runs remain
+eligible. A direct <code>resume</code> deliberately overrides the delay. Claiming clears <code>ready_at</code> so
+subsequent retry or recovery is not delayed again.</p>
+<p>SQLite serializes writers; the lease covers a whole run. Several tasks of that run execute
+concurrently in its owning event loop. Separate processes may own separate runs. Short,
+synchronous SQLite transactions execute on the event-loop thread. A contended or slow disk can
+delay the heartbeat: increase the TTL for your workload and keep the database on local storage.
+The default TTL is 15 seconds. Lease comparisons use wall-clock time on one machine; clock jumps
+can change when ownership expires. An epoch still fences writes after a takeover.</p>
+<h2 id="state-machines">State machines</h2>
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; pending
+    pending --&gt; running: acquire lease
+    running --&gt; succeeded: all tasks committed
+    running --&gt; failed: terminal task failure
+    running --&gt; waiting: no executable task; signal absent
+    waiting --&gt; pending: signal delivered
+    running --&gt; paused: graceful cancellation / scheduler error
+    pending --&gt; cancelled: operator cancellation
+    running --&gt; cancelled: operator cancellation
+    paused --&gt; cancelled: operator cancellation
+    waiting --&gt; cancelled: operator cancellation
+    paused --&gt; running: resume
+    failed --&gt; pending: explicit selective retry
+    running --&gt; running: expired lease reclaimed under new epoch
+</code></pre>
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; pending
+    pending --&gt; running: dependencies succeeded + capacity available
+    running --&gt; succeeded: JSON output committed
+    running --&gt; retrying: failure budget remains
+    retrying --&gt; running: persisted deadline reached
+    running --&gt; failed: failure budget exhausted
+    pending --&gt; blocked: failed or blocked dependency
+    pending --&gt; waiting: dependency ready; signal absent
+    waiting --&gt; pending: signal received
+    running --&gt; pending: interrupted attempt recovered
+    failed --&gt; pending: explicit retry
+    blocked --&gt; pending: all dependencies recovered or selected
+    pending --&gt; cancelled: run cancelled
+    running --&gt; cancelled: run cancelled
+    retrying --&gt; cancelled: run cancelled
+    blocked --&gt; cancelled: run cancelled
+    waiting --&gt; cancelled: run cancelled
+</code></pre>
+<p>Independent branches finish after a task fails; descendants are marked blocked without
+execution. A run becomes failed when no executable work remains. <code>resume</code> returns existing
+results for failed and succeeded runs without retrying functions. Explicit <code>retry</code> can reopen a
+failed run. It validates the same workflow fingerprint, checks ownership, and atomically resets
+selected failed steps and blocked descendants whose dependencies can all make progress. Successful
+checkpoints stay unchanged. A branch left failed keeps its shared descendants blocked.</p>
+<p>A signal-gated task moves to <code>waiting</code> only after its dependencies succeed. The scheduler
+releases the run lease when no other work is executable, and the local queue excludes waiting
+runs. <code>Store.signal</code> inserts one immutable payload and wakes matching tasks in the same write
+transaction. Signal-before-wait is safe: the scheduler checks again under the write lock before
+parking a task. If delivery races with lease release, release leaves the run pending for another
+claim. Successful upstream checkpoints and the signal survive a crash. Waiting consumes no
+attempt; task execution after a signal retains normal at-least-once semantics.</p>
+<p>Retry resets each affected task's current failure budget to zero, while preserving attempt numbers,
+attempt records, idempotency keys, and all existing events. Each <code>task.reset</code> event records the
+previous status and budget count, followed by <code>run.retry_requested</code>. The run becomes pending and
+is then claimed normally with a new epoch. If the process exits between reset and execution,
+<code>resume</code> continues the pending run. Competing reset requests serialize in <code>BEGIN IMMEDIATE</code>;
+a second request sees the pending/running state and cannot reset the same failure again.</p>
+<p>Operator cancellation is a separate terminal transition. <code>Store.cancel</code> serializes with task
+commits under <code>BEGIN IMMEDIATE</code>, interrupts live attempts, marks unfinished tasks cancelled,
+advances the epoch, clears the lease, and appends <code>run.cancelled</code>. If a checkpoint commits
+before cancellation, it is preserved; if cancellation commits first, the old owner is fenced
+out. The scheduler cancels active coroutines when it observes the revoked lease. It cannot
+undo effects outside SQLite or force blocking work to stop. Repeating cancellation is a no-op;
+failed and succeeded runs cannot be cancelled.</p>
+<p><code>Store.retry_plan</code> uses a read-only transaction for a consistent preview. It is a snapshot, not a
+reservation: applying retry revalidates the current state inside the write transaction. Retry
+requires no additional schema change. See <a href="../recovery/">the recovery guide</a>.</p>
+<p><code>RetryPolicy.max_attempts</code> is the budget for <strong>failed</strong> attempts. A task with <code>max_attempts=3</code>
+may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
+and do not consume the failure budget; repeated crashes may therefore create more than three
+attempt records. Manual retry opens a fresh failure budget, so lifetime failures can also exceed
+<code>max_attempts</code>; the attempt journal retains that history. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
+Jitter and exception-specific retry filters are future work.</p>
+<h2 id="commit-boundary-and-side-effects">Commit boundary and side effects</h2>
+<p>The result, task state, attempt state, and corresponding event commit in one transaction.
+If any write fails, all of those changes roll back. A completed checkpoint is therefore either
+fully visible or absent. <code>PRAGMA synchronous=FULL</code> and WAL are enabled. These settings still
+depend on the filesystem and hardware honoring durability operations.</p>
+<table>
+<thead>
+<tr>
+<th>Failure point</th>
+<th>Recovery behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before a task starts</td>
+<td>Task remains pending</td>
+</tr>
+<tr>
+<td>During the coroutine</td>
+<td>Expired owner is replaced; interrupted attempt is recorded and rerun</td>
+</tr>
+<tr>
+<td>After an external side effect, before checkpoint</td>
+<td>Task may execute the side effect again</td>
+</tr>
+<tr>
+<td>During the checkpoint transaction</td>
+<td>Transaction rolls back; uncommitted work is rerun</td>
+</tr>
+<tr>
+<td>After successful checkpoint</td>
+<td>Output is reused; function is not called again</td>
+</tr>
+<tr>
+<td>Old worker returns after takeover</td>
+<td>Fenced write raises <code>LeaseLost</code>; result is rejected</td>
+</tr>
+<tr>
+<td>Exception or cooperative timeout</td>
+<td>Failure count increments; retry or terminal failure is persisted</td>
+</tr>
+<tr>
+<td>SIGINT / coroutine cancellation</td>
+<td>Running attempts become interrupted; run is paused</td>
+</tr>
+<tr>
+<td>SIGTERM during worker execution</td>
+<td>Worker stops claiming, drains for a bounded time, then pauses unfinished runs for immediate reclaim</td>
+</tr>
+<tr>
+<td>Operator cancels run</td>
+<td>Unfinished tasks become cancelled; old worker is fenced out; checkpoints remain</td>
+</tr>
+<tr>
+<td>Signal arrives while run waits</td>
+<td>Signal commits and the run becomes eligible for another worker claim</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>Context.idempotency_key</code> for side-effect deduplication. The key is stable for one <code>(run_id,
+task_name)</code> across attempts, but different runs intentionally get different keys. A payment,
+message, file write, or remote mutation needs its own idempotency contract. Retrace does not
+provide exactly-once external effects.</p>
+<h2 id="definition-and-data-contract">Definition and data contract</h2>
+<p>Definitions are frozen dataclasses. DAG validation checks unique names, missing dependencies,
+and cycles. A canonical manifest fingerprints workflow name/version, task names, dependencies,
+qualified function identity, timeout, and retry settings. It does <strong>not</strong> hash function bytecode,
+closures, environment variables, files, package versions, or remote APIs. Bump the workflow version
+when any such change makes prior checkpoints incompatible. Retain the original code to resume
+older runs; version mismatch is deliberately not overrideable.</p>
+<p>Inputs and outputs cross a JSON boundary, with a 1 MiB encoded limit and non-finite numbers
+rejected. Each task receives independently decoded input and dependency data. Local mutations
+cannot change another task's checkpoint. Python-specific objects, generators, and pickle are
+not supported. Tuples normalize to arrays; dictionary keys must be appropriate for JSON.
+Store blobs externally and return references/checksums.</p>
+<h2 id="observation-and-security">Observation and security</h2>
+<p>The inspector opens a read-only SQLite connection per HTTP request and reads each multi-table
+snapshot inside a single transaction. The server never imports workflow modules. Browser polling
+fetches the latest 100 runs and ordered journal pages, with an exclusive event cursor. The browser
+retains the latest 1,000 received events. Task, kind, and payload-text filters operate on that
+retained window without changing the fetch cursor. JSONL download exports the matching events
+in ascending ID order; <code>retrace events</code> exports the complete journal. Filters reset when changing
+runs, and expanded event payloads stay open during polling.</p>
+<p>The worker-epoch view groups the complete attempt history by fencing epoch and enriches it with
+claim times and recovery counts from the live journal when those events are still retained.
+It shows retry and takeover handoffs without exposing owner tokens. An old claim time may be
+absent after the browser's 1,000-event window advances; the attempt history remains complete.</p>
+<p>The UI treats stored values as data and escapes markup. Task outputs use <code>textContent</code>. The server
+binds only to <code>127.0.0.1</code>, validates Host and Origin, sends a restrictive Content Security Policy,
+and exposes no mutation endpoints. It has no authentication and is not an internet-facing server.</p>
+<h2 id="storage-and-scale">Storage and scale</h2>
+<p><code>runs</code> stores definition, input, lease, and overall state; <code>tasks</code> stores the latest checkpoint;
+<code>attempts</code> preserves execution history; <code>events</code> is the ordered audit log; <code>signals</code> stores
+one payload per run and signal name. <code>queue_policies</code> stores per-definition limits and the
+fairness cursor; <code>scheduler_clock</code> stores its monotonic sequence. Foreign keys are enabled.
+<code>PRAGMA user_version=4</code> marks the schema; unknown future versions are refused. Opening an older
+database for writing applies the submission, signal, and queue migrations in transactions,
+preserving existing runs and checkpoints. Read-only connections do not migrate. Back up
+databases before upgrading alpha versions; a general migration framework is still future work.</p>
+<p>The scheduler scans persisted task state and currently loads task snapshots when starting work.
+It favors transparency over high-throughput scheduling and is intended for modest DAGs with
+meaningful I/O per step. It is not optimized for millions of tiny tasks. SQLite permits only one
+writer at a time. Journals grow without automatic retention. Use the reproducible benchmark script
+to measure your own disk/workload rather than assuming a throughput guarantee.</p>
+<h2 id="verification-map">Verification map</h2>
+<ul>
+<li><code>tests/test_core.py</code>: state propagation, concurrency bound, retries, version checks, timeout,
+  JSON contract, isolated inputs, atomic rollback, and stale-worker fencing.</li>
+<li><code>tests/test_recovery.py</code>: actual process kill and new-process recovery, database integrity,
+  heartbeat loss, retry deadline persistence, and generated DAG reference comparisons.</li>
+<li><code>tests/test_cli.py</code>: command exit codes, JSON output, event export, demo, and invalid inputs.</li>
+<li><code>tests/test_worker.py</code>: competing process claims, expired-lease takeover, definition matching,
+  stale-owner fencing, and bounded parallel runs.</li>
+<li><code>tests/test_submission.py</code>: competing producer deduplication, delayed eligibility,
+  conflicting requests, and v1-to-v2 migration.</li>
+<li><code>tests/test_server.py</code>: coherent snapshots, event cursors, read-only routes, Host/Origin checks,
+  static assets, and traversal rejection.</li>
+<li><code>scripts/smoke_wheel.py</code>: install the wheel in a new virtual environment and run from outside
+  the repository, verifying the packaged inspector assets.</li>
+</ul>
+<p>Implementation references: <a href="https://docs.python.org/3/library/sqlite3.html#transaction-control">Python sqlite3 transaction control</a>,
+<a href="https://docs.python.org/3/library/asyncio-task.html#task-cancellation">asyncio task cancellation</a>,
+and <a href="https://sqlite.org/wal.html">SQLite WAL</a>.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../choosing-retrace/"><small>← PREVIOUS</small><strong>Is Retrace a fit?</strong></a><a href="../recovery/"><small>NEXT →</small><strong>Recovery contract</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/architecture.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#ownership-protocol">Ownership protocol</a>
+<a class="toc-level-2" href="#state-machines">State machines</a>
+<a class="toc-level-2" href="#commit-boundary-and-side-effects">Commit boundary and side effects</a>
+<a class="toc-level-2" href="#definition-and-data-contract">Definition and data contract</a>
+<a class="toc-level-2" href="#observation-and-security">Observation and security</a>
+<a class="toc-level-2" href="#storage-and-scale">Storage and scale</a>
+<a class="toc-level-2" href="#verification-map">Verification map</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

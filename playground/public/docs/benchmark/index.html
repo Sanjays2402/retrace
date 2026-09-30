@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="See the method behind the local overhead baseline.">
+  <title>Benchmarks · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link current" href="../benchmark/" aria-current="page">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Benchmarks</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link current" href="../benchmark/" aria-current="page">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> REFERENCE</span><h1>Benchmarks</h1><p>See the method behind the local overhead baseline.</p></div><article class="markdown-body"><p>Run <code>python scripts/benchmark.py --tasks 100 --repetitions 5</code> after installing Retrace.
+Each repetition creates a fresh local SQLite database and runs 100 independent async no-op
+steps at concurrency eight. Timing includes run creation, scheduling, durable task/attempt/event
+writes, and completion; schema initialization occurs before the timer. Each result is checked.</p>
+<p><a href="../benchmark-baseline.json">The initial measurement</a> records the raw samples and environment:
+Python 3.12.14 on Darwin arm64, SQLite WAL with <code>synchronous=FULL</code>, local temporary storage.
+The median was about <strong>60 ms for 100 steps</strong> across five repetitions. This is a tiny-payload,
+local-disk overhead measurement, not a throughput guarantee or a comparison with other engines.</p>
+<p>No-op tasks amplify scheduler and disk overhead. Real I/O workloads, task payload sizes,
+filesystem behavior, contention, journaling growth, CPU frequency, and graph shape can change
+results substantially. The benchmark does not exercise external effects or simulate a power loss.
+Use the script to compare changes on the same machine; retain raw samples and describe the workload.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../api/"><small>← PREVIOUS</small><strong>API and CLI</strong></a><a href="../security/"><small>NEXT →</small><strong>Security</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/benchmark.md">Edit source on GitHub ↗</a></main></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Check the scope and tradeoffs before adopting it.">
+  <title>Is Retrace a fit? · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link current" href="../choosing-retrace/" aria-current="page">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Is Retrace a fit?</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link current" href="../choosing-retrace/" aria-current="page">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> START HERE</span><h1>Is Retrace a fit?</h1><p>Check the scope and tradeoffs before adopting it.</p></div><article class="markdown-body"><p>Choose Retrace when you own a small async Python pipeline, can keep its SQLite database
+on local disk, want completed steps to survive process restarts, and prefer no background
+services. It is useful for batch imports, document ingestion, and local automation.</p>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Retrace today</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resume a process after a crash</td>
+<td>Supported with expired leases and preserved checkpoints</td>
+</tr>
+<tr>
+<td>Inspect retries and step outputs locally</td>
+<td>Included read-only inspector</td>
+</tr>
+<tr>
+<td>Scale one run across many machines</td>
+<td>Not supported; use a distributed workflow platform</td>
+</tr>
+<tr>
+<td>Schedule recurring jobs</td>
+<td>Bring an external scheduler; no built-in scheduler daemon</td>
+</tr>
+<tr>
+<td>Run large CPU tasks</td>
+<td>Use a separate process or service; keep the event loop responsive</td>
+</tr>
+<tr>
+<td>Exactly-once external API calls</td>
+<td>Requires downstream deduplication; tasks are at least once</td>
+</tr>
+<tr>
+<td>Shared multi-tenant dashboard</td>
+<td>Not supported; inspector is loopback-only</td>
+</tr>
+<tr>
+<td>Long-lived stable API</td>
+<td>Early alpha; pin versions and read release notes</td>
+</tr>
+</tbody>
+</table>
+<p>Read <a href="../architecture/">architecture</a>, <a href="../recovery/">recovery rules</a>, and the
+<a href="../benchmark/">benchmark methodology</a> before relying on it. Benchmarks describe one
+machine and workload, not a general throughput guarantee.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../examples/"><small>← PREVIOUS</small><strong>Real integrations</strong></a><a href="../architecture/"><small>NEXT →</small><strong>Architecture</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/choosing-retrace.md">Edit source on GitHub ↗</a></main></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Find the Python API and command-line usage.">
+  <title>API and CLI · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link current" href="../api/" aria-current="page">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>API and CLI</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link current" href="../api/" aria-current="page">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> REFERENCE</span><h1>API and CLI</h1><p>Find the Python API and command-line usage.</p></div><article class="markdown-body"><h2 id="define-tasks">Define tasks</h2>
+<pre><code class="language-python">from retrace import Context, RetryPolicy, Task, Workflow
+
+
+async def fetch(ctx: Context):
+    # Use an async API client here. For external mutations, pass ctx.idempotency_key.
+    return {&quot;records&quot;: ctx.input[&quot;count&quot;]}
+
+
+workflow = Workflow(
+    &quot;ingestion&quot;,
+    (
+        Task(
+            &quot;fetch&quot;,
+            fetch,
+            timeout=20,
+            retry=RetryPolicy(
+                max_attempts=4,
+                initial_delay=0.5,
+                max_delay=8,
+            ),
+        ),
+    ),
+    version=&quot;1&quot;,
+)
+</code></pre>
+<p>Names start with an ASCII letter and may contain letters, digits, <code>_</code>, and <code>-</code>, up to 64
+characters. Task functions must be <code>async def</code>. A dependency must name another task in the
+same DAG. Duplicate names, duplicate dependencies, missing dependencies, and cycles are rejected.</p>
+<p><code>Context</code> contains:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_id</code></td>
+<td>Stable run identifier</td>
+</tr>
+<tr>
+<td><code>task_name</code></td>
+<td>Current task name</td>
+</tr>
+<tr>
+<td><code>attempt</code></td>
+<td>1-based attempt number, including previous interruptions</td>
+</tr>
+<tr>
+<td><code>input</code></td>
+<td>Independently decoded workflow input</td>
+</tr>
+<tr>
+<td><code>dependencies</code></td>
+<td>Mapping of direct dependency names to committed JSON outputs</td>
+</tr>
+<tr>
+<td><code>signal</code></td>
+<td>JSON payload of the declared signal gate, or <code>None</code> for ordinary tasks</td>
+</tr>
+<tr>
+<td><code>idempotency_key</code></td>
+<td>Stable SHA-256 key for this logical task within this run</td>
+</tr>
+</tbody>
+</table>
+<p>Default retry policy: three failed attempts, initial delay 0.25 s, max delay 30 s. Default
+per-attempt timeout: 60 s. Ordinary <code>Exception</code> subclasses, including JSON serialization
+failures and timeouts, are retryable under the configured budget. Cancellation is propagated,
+not treated as a failure. Return JSON-compatible, small values. Task exceptions are persisted
+as a type/message string capped at 4,000 characters; tracebacks are not persisted.</p>
+<h2 id="run-and-resume">Run and resume</h2>
+<pre><code class="language-python">with Store(&quot;jobs.db&quot;) as store:
+    engine = Engine(store, concurrency=4, lease_ttl=15)
+    run_id = store.create(workflow, {&quot;count&quot;: 128})
+    # Save the ID before execution so the caller can recover after a hard crash.
+    result = await engine.resume(workflow, run_id)
+</code></pre>
+<p><code>Engine.run(workflow, input)</code> creates and executes a new run in one call. <code>Store.create</code> plus
+<code>Engine.resume</code> lets a caller save the run ID first. Both execution methods return <code>RunResult</code>
+with <code>run_id</code>, <code>status</code>, <code>outputs</code> of succeeded tasks, and <code>errors</code> of failed tasks. A terminal
+failed workflow returns a result with <code>status="failed"</code>; infrastructure/ownership errors raise.</p>
+<h2 id="durable-signals">Durable signals</h2>
+<p>Set <code>Task(..., wait_for="decision")</code> to gate a task on an external event. After its
+dependencies succeed, Retrace records the task as <code>waiting</code> and releases the run lease.
+No attempt or timeout budget is spent while it waits. The run result has <code>status="waiting"</code>.
+The task's <code>ctx.signal</code> receives the decoded JSON payload when it eventually executes.</p>
+<pre><code class="language-bash">retrace --db jobs.db run examples.approval:workflow --input '{&quot;request&quot;:&quot;release-42&quot;}'
+# Copy the run ID printed on stderr; the run now waits without occupying a worker.
+retrace --db jobs.db signal RUN_ID decision --payload '{&quot;approved&quot;:true}'
+retrace --db jobs.db resume examples.approval:workflow RUN_ID
+</code></pre>
+<p>Or call <code>store.signal(run_id, "decision", {"approved": True})</code>. The signal can arrive
+before the gate is reached. Delivery is one-shot per run and signal name: identical
+redelivery returns <code>False</code>, while a different payload raises <code>ValueError</code>. The payload is
+immutable and survives worker crashes and task retries. Multiple tasks may use the same
+signal, each receiving its own decoded copy. <code>Store.signals(run_id)</code> lists delivered
+signals. Signals must be declared by at least one task and cannot be newly delivered to
+a terminal run. A waiting run is not claimed again until a matching signal arrives;
+<code>Worker.serve()</code> automatically resumes it on the next poll. Waiting has no deadline yet;
+cancel the run if the external decision will never arrive. Cancellation also fences an
+active worker and leaves the signal history inspectable.</p>
+<p>Important exceptions:</p>
+<ul>
+<li><code>RunBusy</code>: another worker's lease is still live. Retry <code>resume</code> after that lease expires or the worker exits.</li>
+<li><code>LeaseLost</code>: this worker no longer owns the run; its writes have been rejected.</li>
+<li><code>DefinitionMismatch</code>: restore the original code/definition or create a new run.</li>
+<li><code>KeyError</code>: requested run does not exist.</li>
+<li><code>sqlite3.Error</code>: storage failure; completed transactions remain the recovery boundary.</li>
+</ul>
+<p>Use <code>Store</code> as a context manager. It is a single-thread connection; create separate stores in
+other threads or processes. Configure a finite positive integer concurrency and lease TTL of
+at least 0.3 s. The minimum is intended for tests; the default gives real workloads more margin.
+Never call blocking code on the event loop. <code>asyncio.to_thread</code> can offload blocking work, but
+cancelling the awaiting coroutine does not forcibly stop the underlying thread or its effects.</p>
+<h2 id="local-worker-pool">Local worker pool</h2>
+<p><code>Store.create</code> can enqueue a run without immediately executing it. A <code>Worker</code> polls the store
+for pending, paused, or expired runs with the same workflow fingerprint:</p>
+<pre><code class="language-python">from retrace import Store, Worker
+
+with Store(&quot;jobs.db&quot;) as store:
+    run_id = store.create(workflow, {&quot;count&quot;: 128})
+    # In a worker process using its own Store connection:
+    results = await Worker(store, workflow, max_runs=2).serve(once=True)
+</code></pre>
+<p><code>Worker.serve(once=True)</code> returns completed <code>RunResult</code> values and exits when no eligible
+run remains. <code>serve(on_result=callback)</code> polls until cancelled and reports each completed run
+to the synchronous callback. <code>max_runs</code> bounds parallel runs in a process; <code>concurrency</code>
+bounds tasks in each run. <code>poll_interval</code> defaults to one second. Workers on the same machine
+must use separate <code>Store</code> connections to the same local SQLite file. <code>Store.claim_next</code> makes
+the queue selection and fenced lease assignment one transaction. A crash can still repeat an
+external side effect before its checkpoint; use <code>Context.idempotency_key</code> downstream.</p>
+<p>Use <code>Worker(store, (workflow_a, workflow_b), max_runs=4)</code> for a shared pool. Each claim picks
+the least recently served eligible definition, then its oldest run. This round-robin state is
+persisted in SQLite and shared by competing local processes. A single-definition worker keeps
+its original FIFO behavior. Configure limits with
+<code>store.configure_queue(workflow, max_active=2, max_queued=100)</code> or the CLI <code>queue --configure</code>
+command. <code>max_active</code> caps live leases across workers; <code>max_queued</code> bounds pending and paused
+runs at submission time. <code>Store.create</code> raises <code>QueueFull</code> when full, except that an identical
+submission key returns its existing ID. <code>Store.queue_stats()</code> reports counts and
+<code>oldest_ready_age_seconds</code>, or <code>None</code> when no run is eligible. A direct <code>Engine.resume</code> can
+still claim past the worker cap for manual recovery.</p>
+<p>Pass <code>stop_event=asyncio.Event()</code> and <code>drain_timeout=30</code> to <code>Worker.serve</code> to request a
+graceful stop. Once the event is set, the worker claims no more runs. It waits up to the
+timeout for owned runs to finish, then cancels remaining coroutines, marks their attempts
+interrupted, and releases those runs as <code>paused</code> for immediate takeover. <code>drain_timeout=0</code>
+pauses immediately; negative or non-finite values are rejected. Completed runs still reach
+<code>on_result</code> (or the <code>once=True</code> result list). Unfinished runs remain inspectable and resumable.
+The CLI worker handles SIGTERM this way by default; use <code>--drain-timeout SECONDS</code> to tune it.
+Ctrl-C retains its immediate interruption behavior. A hard kill cannot drain and leaves
+recovery to the lease timeout. Blocking or cancellation-suppressing tasks can delay shutdown.</p>
+<p><code>Store.create(workflow, input, key="order-42", ready_at=timestamp)</code> supports retries by
+producers and delayed dispatch. A key is unique across the database, limited to 128 characters,
+and stored as a SHA-256 hash. Repeating it with the same workflow fingerprint and canonical JSON
+input returns the original run ID without creating new tasks or events; changing either raises
+<code>ValueError</code>. The first submission's <code>ready_at</code> wins. Workers ignore pending runs before that
+Unix timestamp. Explicit <code>Engine.resume</code> may claim one early, and claiming consumes the delay.
+This is <strong>submission</strong> deduplication; it does not make task side effects exactly once.</p>
+<h2 id="durable-run-cancellation">Durable run cancellation</h2>
+<p><code>store.cancel(run_id)</code> atomically marks a pending, running, or paused run <code>cancelled</code> and
+returns <code>True</code>. Calling it again returns <code>False</code>. An unknown ID raises <code>KeyError</code>; succeeded
+or failed runs raise <code>ValueError</code>. The CLI equivalent is <code>retrace --db jobs.db cancel &lt;RUN_ID&gt;</code>.</p>
+<p>Cancellation advances the ownership epoch and clears the lease so the previous worker cannot
+commit another checkpoint. Running attempts become <code>interrupted</code>; unfinished tasks become
+<code>cancelled</code>, and completed outputs remain available. A worker observing the lost lease stops
+its active coroutines and returns a <code>RunResult(status="cancelled")</code>. The event journal records
+the cancellation. A cancelled run is terminal: <code>resume</code> returns its stored result and <code>retry</code>
+does not reopen it. Create a new run if the workflow should execute again. External effects
+that happened before cancellation cannot be rolled back, and blocking code may continue until
+it cooperates. Cancelling an awaiting <code>Engine</code> coroutine or pressing Ctrl-C instead pauses the
+run for later resumption.</p>
+<h2 id="explicit-retry-and-preview">Explicit retry and preview</h2>
+<pre><code class="language-python">plan = store.retry_plan(workflow, run_id, task_names=[&quot;fetch&quot;])
+result = await engine.retry(workflow, run_id, tasks=[&quot;fetch&quot;])
+</code></pre>
+<p>Omit the selection to retry all failed steps. <code>RetryPlan</code> contains sorted tuples: <code>selected</code>,
+<code>reset</code>, <code>preserved</code> (successful checkpoints), <code>remaining_failed</code>, and <code>remaining_blocked</code>, plus
+<code>run_id</code>. Preview does not mutate the database and works with <code>Store(path, readonly=True)</code>.</p>
+<p><code>Store.retry_failed(workflow, run_id, task_names=None)</code> performs the atomic reset without starting
+a worker and returns the applied plan. Follow it with <code>Engine.resume</code>. <code>Engine.retry</code> combines
+those two operations. Retry is valid only for failed runs and currently failed selected steps;
+empty, duplicate, unknown, blocked, or successful selections are rejected with <code>ValueError</code>.
+Live ownership raises <code>RunBusy</code>; changed definitions raise <code>DefinitionMismatch</code>.</p>
+<p>Reset tasks receive a fresh failure budget. <code>tasks[name]["failures"]</code> is the current budget count;
+<code>attempts</code> and the attempt journal remain cumulative. Shared descendants are reopened only when
+all dependencies are already successful or included in the recovery plan. The run can remain
+failed if an unselected branch is still failed. No inputs, function versions, or successful
+outputs are changed. <a href="../recovery/">Read the full recovery contract</a>.</p>
+<h2 id="cli">CLI</h2>
+<p>Global flags go <strong>before</strong> the subcommand:</p>
+<pre><code class="language-bash">retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{&quot;count&quot;:128}'
+retrace --db jobs.db submit my_pipeline:workflow --input '{&quot;count&quot;:128}'
+retrace --db jobs.db submit my_pipeline:workflow --input '{&quot;count&quot;:128}' --key job-42 --delay 60
+retrace --db jobs.db worker my_pipeline:workflow --max-runs 2 --drain-timeout 30
+retrace --db jobs.db worker my_pipeline:workflow --once
+retrace --db jobs.db cancel &lt;RUN_ID&gt;
+retrace --db jobs.db resume my_pipeline:workflow &lt;RUN_ID&gt;
+retrace --db jobs.db retry my_pipeline:workflow &lt;RUN_ID&gt; --task fetch --dry-run
+retrace --db jobs.db retry my_pipeline:workflow &lt;RUN_ID&gt; --task fetch
+retrace --db jobs.db runs
+retrace --db jobs.db inspect &lt;RUN_ID&gt;
+retrace --db jobs.db events &lt;RUN_ID&gt; --after 42
+retrace --db jobs.db serve --port 7760
+</code></pre>
+<p>Workflow imports are trusted Python and execute module-level code. The current working directory
+is added temporarily to the import path so project-local definitions are importable.</p>
+<p><code>runs</code>, <code>inspect</code>, <code>events</code>, and <code>retry --dry-run</code> open read-only connections and never create
+a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
+in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
+monotonic across the database and may have gaps within a run.</p>
+<p>Exit codes: <code>0</code> success, <code>1</code> terminal workflow failure, <code>2</code> invalid input/definition or an
+infrastructure error, <code>130</code> graceful keyboard interruption. <code>demo --crash</code> intentionally exits
+with <code>86</code>. Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
+<code>submit</code> returns a JSON object with the run ID, current status, and eligibility timestamp.
+<code>--delay</code> is a nonnegative number of seconds; <code>--key</code> provides idempotency within the database.
+<code>worker --once</code> prints a JSON array of
+completed runs; a continuous worker emits one JSON object per completed run. Individual task
+failures appear in each result and do not stop the worker process.</p>
+<h2 id="inspector-api">Inspector API</h2>
+<p>The local server starts only if the database exists. It serves:</p>
+<ul>
+<li><code>GET /api/runs</code>: latest 100 run summaries.</li>
+<li><code>GET /api/runs/{id}</code>: run manifest/input, task checkpoints, and attempt history.</li>
+<li><code>GET /api/runs/{id}/events?after={cursor}</code>: up to 500 events and next cursor.</li>
+</ul>
+<p>All responses are JSON with <code>Cache-Control: no-store</code>. Read-only requests open their own database
+connection. Unknown resources return <code>404</code>, invalid cursor values <code>400</code>, forbidden Host/Origin
+headers <code>403</code>, and database access errors <code>503</code>. There are no write routes, authentication tokens,
+or remote bind options. See <a href="../security/">SECURITY.md</a> before using real data.</p>
+<h2 id="journal-filtering-in-the-inspector">Journal filtering in the inspector</h2>
+<p>Use the task and event-kind selectors together with payload search to narrow the retained
+journal. “Show this step's events” applies the selected graph node as a task filter. Clear filters
+to restore all retained events. Expand Payload to inspect retry/reset metadata.</p>
+<p>“Export shown · JSONL” downloads exactly the matching retained events in ascending event-ID
+order. The inspector retains only the latest 1,000 events received; its filters do not change
+fetch cursors or discard nonmatching incoming events. For the complete journal, use
+<code>retrace events RUN_ID &gt; events.jsonl</code>. Export is disabled when nothing matches.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../recovery/"><small>← PREVIOUS</small><strong>Recovery contract</strong></a><a href="../benchmark/"><small>NEXT →</small><strong>Benchmarks</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/api.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#define-tasks">Define tasks</a>
+<a class="toc-level-2" href="#run-and-resume">Run and resume</a>
+<a class="toc-level-2" href="#durable-signals">Durable signals</a>
+<a class="toc-level-2" href="#local-worker-pool">Local worker pool</a>
+<a class="toc-level-2" href="#durable-run-cancellation">Durable run cancellation</a>
+<a class="toc-level-2" href="#explicit-retry-and-preview">Explicit retry and preview</a>
+<a class="toc-level-2" href="#cli">CLI</a>
+<a class="toc-level-2" href="#inspector-api">Inspector API</a>
+<a class="toc-level-2" href="#journal-filtering-in-the-inspector">Journal filtering in the inspector</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

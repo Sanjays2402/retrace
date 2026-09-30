@@ -19,8 +19,9 @@ process restart.
 
 **Try it now:** [Interactive recovery demo](https://sanjays2402.github.io/retrace/) — no install or account.
 
-**New here?** [Five-minute recovery walkthrough](docs/getting-started.md) ·
-[Real CSV and HTTP examples](docs/examples.md) · [Is Retrace a fit?](docs/choosing-retrace.md)
+**New here?** [Five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/) ·
+[Real CSV and HTTP examples](https://sanjays2402.github.io/retrace/docs/examples/) ·
+[Is Retrace a fit?](https://sanjays2402.github.io/retrace/docs/choosing-retrace/)
 
 ## Try it in a minute
 

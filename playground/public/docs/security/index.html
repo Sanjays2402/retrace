@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Read the trust and data-handling boundaries.">
+  <title>Security · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link current" href="../security/" aria-current="page">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Security</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link current" href="../security/" aria-current="page">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> REFERENCE</span><h1>Security</h1><p>Read the trust and data-handling boundaries.</p></div><article class="markdown-body"><p>Retrace is an early-alpha local development tool for trusted Python workflows.</p>
+<ul>
+<li>Workflow modules execute arbitrary Python in the worker's process. Do not import definitions
+  from untrusted sources. Retrace is not a sandbox.</li>
+<li>Inputs, outputs, and exception messages are stored in plaintext SQLite. Do not persist secrets
+  or regulated data without an appropriate storage/access design. No automatic redaction is provided.</li>
+<li>The inspector is read-only and binds to <code>127.0.0.1</code>. Host/Origin validation and a Content Security
+  Policy reduce browser-based access risks; they do not authenticate other local processes/users.
+  Do not expose it through a public proxy or tunnel. No remote hosting mode is supported.</li>
+<li>Use local filesystems. Restrict database and artifact permissions using your operating system.
+  Retrace does not encrypt databases or manage encryption keys.</li>
+<li>Stable idempotency keys help downstream deduplication; they are identifiers, not secrets or
+  authentication credentials. Fencing covers database writes, not effects in remote systems.</li>
+<li>Submission keys are stored as SHA-256 hashes to avoid saving raw identifiers. Short or
+  predictable keys can still be guessed; do not use secrets as submission keys.</li>
+</ul>
+<p>For a vulnerability, use GitHub's private vulnerability reporting if enabled for this repository.
+Otherwise contact the maintainer through the contact method on their GitHub profile before posting
+sensitive reproduction details. General reliability bugs can be filed as normal issues with a minimal,
+sanitized workflow. The latest alpha release is the only supported version at present.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../benchmark/"><small>← PREVIOUS</small><strong>Benchmarks</strong></a><a href="../roadmap/"><small>NEXT →</small><strong>Roadmap</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/SECURITY.md">Edit source on GitHub ↗</a></main></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>
