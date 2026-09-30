@@ -14,7 +14,16 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from retrace import DefinitionMismatch, Engine, LeaseLost, RunBusy, Store, Workflow, __version__
+from retrace import (
+    DefinitionMismatch,
+    Engine,
+    LeaseLost,
+    QueueFull,
+    RunBusy,
+    Store,
+    Workflow,
+    __version__,
+)
 
 
 def load_workflow(spec: str) -> Workflow:
@@ -54,10 +63,16 @@ def parser() -> argparse.ArgumentParser:
         help="wait this many seconds before a worker claims the run",
     )
     worker = commands.add_parser("worker", help="claim and execute queued runs on this machine")
-    worker.add_argument("workflow")
+    worker.add_argument("workflow", nargs="+", help="one or more MODULE:ATTRIBUTE definitions")
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
     worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
     worker.add_argument("--once", action="store_true", help="drain available runs and exit")
+    queue = commands.add_parser("queue", help="show queue depth, wait age, and policies")
+    queue.add_argument(
+        "--configure", metavar="WORKFLOW", help="persist limits for MODULE:ATTRIBUTE"
+    )
+    queue.add_argument("--max-active", type=int, help="max live runs across all local workers")
+    queue.add_argument("--max-queued", type=int, help="max pending or paused runs")
     worker.add_argument(
         "--drain-timeout",
         type=float,
@@ -112,8 +127,10 @@ def main(argv: list[str] | None = None) -> int:
 
             serve(args.db, args.port)
             return 0
-        readonly = args.command in ("runs", "inspect", "events", "trace") or (
-            args.command == "retry" and args.dry_run
+        readonly = (
+            args.command in ("runs", "inspect", "events", "trace")
+            or (args.command == "queue" and args.configure is None)
+            or (args.command == "retry" and args.dry_run)
         )
         with Store(args.db, readonly=readonly) as store:
             if args.command == "runs":
@@ -141,6 +158,31 @@ def main(argv: list[str] | None = None) -> int:
                     for event in page:
                         print(json.dumps(event))
                     cursor = page[-1]["id"]
+            elif args.command == "queue":
+                if args.configure is not None:
+                    if args.max_active is None and args.max_queued is None:
+                        raise ValueError("--configure requires --max-active or --max-queued")
+                    workflow = load_workflow(args.configure)
+                    existing = next(
+                        (
+                            item
+                            for item in store.queue_stats()
+                            if item["fingerprint"] == workflow.fingerprint
+                        ),
+                        None,
+                    )
+                    store.configure_queue(
+                        workflow,
+                        max_active=args.max_active
+                        if args.max_active is not None
+                        else (existing["max_active"] if existing else None),
+                        max_queued=args.max_queued
+                        if args.max_queued is not None
+                        else (existing["max_queued"] if existing else None),
+                    )
+                elif args.max_active is not None or args.max_queued is not None:
+                    raise ValueError("queue limits require --configure WORKFLOW")
+                print(json.dumps(store.queue_stats(), indent=2))
             elif args.command == "submit":
                 workflow = load_workflow(args.workflow)
                 if not math.isfinite(args.delay) or args.delay < 0:
@@ -168,12 +210,12 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "worker":
                 from retrace.worker import Worker
 
-                workflow = load_workflow(args.workflow)
+                workflows = tuple(load_workflow(spec) for spec in args.workflow)
                 if not math.isfinite(args.drain_timeout) or args.drain_timeout < 0:
                     raise ValueError("drain timeout must be finite and nonnegative")
                 dispatcher = Worker(
                     store,
-                    workflow,
+                    workflows,
                     max_runs=args.max_runs,
                     concurrency=args.concurrency,
                     lease_ttl=args.lease_ttl,
@@ -257,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         DefinitionMismatch,
         RunBusy,
         LeaseLost,
+        QueueFull,
     ) as exc:
         print(f"retrace: {exc}", file=sys.stderr)
         return 2

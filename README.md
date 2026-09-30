@@ -104,6 +104,25 @@ runs per process; global `--concurrency` limits ready tasks **within each run**.
 single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
 pass `ctx.idempotency_key` to systems that support deduplication.
 
+For mixed workloads, give a worker multiple definitions. Claims alternate between eligible
+definitions using a durable round-robin cursor, then take the oldest run within each one.
+Queue limits are persisted in SQLite and apply across local workers and producers:
+
+```bash
+retrace --db jobs.db queue --configure examples.pipeline:workflow \
+  --max-active 2 --max-queued 100
+retrace --db jobs.db worker examples.pipeline:workflow examples.approval:workflow --max-runs 4
+retrace --db jobs.db queue
+```
+
+`--max-active` bounds live leases for that exact workflow definition, so a busy pipeline
+cannot fill all slots in a shared worker. `--max-queued` rejects new submissions when the
+pending/paused queue is full; retrying an existing submission key still returns its original
+run. The queue snapshot reports ready, delayed, paused, waiting, active, and recoverable runs,
+plus the age of the oldest eligible run. Policies are per fingerprint; changing the workflow
+definition requires configuring the new fingerprint. The limit applies to worker claims;
+explicit `resume` remains an operator override.
+
 For rolling worker restarts, send **SIGTERM** to a worker process. It stops claiming new runs,
 lets its current runs finish for up to 30 seconds, then pauses any still active work and
 releases its leases. Another worker can claim those paused runs immediately, without waiting

@@ -34,6 +34,10 @@ class DefinitionMismatch(ValueError):
     """Resuming with a changed workflow would invalidate checkpoints."""
 
 
+class QueueFull(RuntimeError):
+    """A workflow's configured pending-run limit has been reached."""
+
+
 @dataclass(frozen=True)
 class Lease:
     run_id: str
@@ -109,7 +113,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1, 2, 3):
+        if version not in (0, 1, 2, 3, 4):
             self.db.close()
             raise ValueError(f"unsupported database schema version: {version}")
         if not readonly:
@@ -144,6 +148,20 @@ class Store:
                         PRIMARY KEY (run_id, name))"""
                     )
                     self.db.execute("PRAGMA user_version=3")
+            if version < 4:
+                with self.transaction():
+                    self.db.execute(
+                        """CREATE TABLE IF NOT EXISTS queue_policies (
+                        fingerprint TEXT PRIMARY KEY, name TEXT NOT NULL,
+                        max_active INTEGER, max_queued INTEGER,
+                        last_claimed INTEGER NOT NULL DEFAULT 0)"""
+                    )
+                    self.db.execute(
+                        """CREATE TABLE IF NOT EXISTS scheduler_clock (
+                        id INTEGER PRIMARY KEY CHECK(id=1), tick INTEGER NOT NULL)"""
+                    )
+                    self.db.execute("INSERT OR IGNORE INTO scheduler_clock VALUES(1,0)")
+                    self.db.execute("PRAGMA user_version=4")
         self.schema_version = self.db.execute("PRAGMA user_version").fetchone()[0]
 
     def close(self) -> None:
@@ -214,6 +232,18 @@ class Store:
                     if caller_run_id is not None and existing["id"] != caller_run_id:
                         raise ValueError("submission key already belongs to another run ID")
                     return existing["id"]
+            policy = self.db.execute(
+                "SELECT max_queued FROM queue_policies WHERE fingerprint=?",
+                (workflow.fingerprint,),
+            ).fetchone()
+            if policy is not None and policy["max_queued"] is not None:
+                queued = self.db.execute(
+                    """SELECT COUNT(*) FROM runs WHERE fingerprint=?
+                    AND status IN ('pending','paused')""",
+                    (workflow.fingerprint,),
+                ).fetchone()[0]
+                if queued >= policy["max_queued"]:
+                    raise QueueFull(f"queue full for {workflow.name}: {queued} queued runs")
             self.db.execute(
                 """INSERT INTO runs(id,name,version,fingerprint,manifest,input,status,
                 created_at,updated_at,submission_key_hash,ready_at)
@@ -461,25 +491,137 @@ class Store:
     def claim_next(
         self, workflow: Workflow, ttl: float, *, exclude: Sequence[str] = ()
     ) -> Lease | None:
-        """Atomically claim the oldest eligible run for this exact workflow definition.
+        """Atomically claim the oldest eligible run of one definition."""
+        claimed = self.claim_next_any((workflow,), ttl, exclude=exclude)
+        return None if claimed is None else claimed[1]
 
-        The selection and ownership change share one write transaction, so competing
-        processes cannot both acquire a pending or expired run.
+    def configure_queue(
+        self, workflow: Workflow, *, max_active: int | None, max_queued: int | None
+    ) -> None:
+        """Persist admission and active-lease limits for an exact definition."""
+        for label, value in (("max_active", max_active), ("max_queued", max_queued)):
+            if value is not None and (type(value) is not int or value < 1):
+                raise ValueError(f"{label} must be a positive integer or None")
+        with self.transaction():
+            self.db.execute(
+                """INSERT INTO queue_policies(fingerprint,name,max_active,max_queued)
+                VALUES(?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET
+                name=excluded.name,max_active=excluded.max_active,
+                max_queued=excluded.max_queued""",
+                (workflow.fingerprint, workflow.name, max_active, max_queued),
+            )
+
+    def queue_stats(self) -> list[dict[str, Any]]:
+        """Point-in-time queue depth, live leases, and oldest eligible wait by definition."""
+        now = time.time()
+        if self.schema_version < 4:
+            rows = self.db.execute(
+                "SELECT DISTINCT fingerprint,name,NULL AS max_active,NULL AS max_queued FROM runs"
+            ).fetchall()
+        else:
+            rows = self.db.execute(
+                """SELECT fingerprint,name,max_active,max_queued FROM queue_policies
+                UNION SELECT fingerprint,name,NULL,NULL FROM runs
+                WHERE fingerprint NOT IN (SELECT fingerprint FROM queue_policies)"""
+            ).fetchall()
+        result = []
+        for row in rows:
+            counts = self.db.execute(
+                """SELECT
+                SUM(CASE WHEN status='pending' AND ready_at<=? THEN 1 ELSE 0 END) AS ready,
+                SUM(CASE WHEN status='pending' AND ready_at>? THEN 1 ELSE 0 END) AS delayed,
+                SUM(CASE WHEN status='paused' THEN 1 ELSE 0 END) AS paused,
+                SUM(CASE WHEN status='waiting' THEN 1 ELSE 0 END) AS waiting,
+                SUM(CASE WHEN status='running' AND owner IS NOT NULL
+                    AND lease_until>? THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN status='running' AND lease_until<=? THEN 1 ELSE 0 END) AS recoverable,
+                MIN(CASE WHEN status='pending' AND ready_at<=? THEN MAX(created_at,ready_at)
+                    WHEN status='paused' THEN updated_at
+                    WHEN status='running' AND lease_until<=? THEN lease_until END) AS oldest
+                FROM runs WHERE fingerprint=?""",
+                (now, now, now, now, now, now, row["fingerprint"]),
+            ).fetchone()
+            result.append(
+                {
+                    "fingerprint": row["fingerprint"],
+                    "name": row["name"],
+                    "max_active": row["max_active"],
+                    "max_queued": row["max_queued"],
+                    "ready": counts["ready"] or 0,
+                    "delayed": counts["delayed"] or 0,
+                    "paused": counts["paused"] or 0,
+                    "waiting": counts["waiting"] or 0,
+                    "active": counts["active"] or 0,
+                    "recoverable": counts["recoverable"] or 0,
+                    "oldest_ready_age_seconds": None
+                    if counts["oldest"] is None
+                    else max(0.0, now - counts["oldest"]),
+                }
+            )
+        return sorted(result, key=lambda item: (item["name"], item["fingerprint"]))
+
+    def claim_next_any(
+        self, workflows: Sequence[Workflow], ttl: float, *, exclude: Sequence[str] = ()
+    ) -> tuple[Workflow, Lease] | None:
+        """Claim from the least recently served eligible definition in one transaction.
+
+        A global SQLite sequence gives equal-share round-robin scheduling across
+        competing local worker processes, while preserving FIFO within a definition.
         """
+        if not workflows:
+            raise ValueError("at least one workflow is required")
+        if len({workflow.fingerprint for workflow in workflows}) != len(workflows):
+            raise ValueError("workflow definitions must be unique")
         excluded = tuple(exclude)
         with self.transaction():
             now = time.time()
-            query = """SELECT id FROM runs WHERE fingerprint=?
-                AND status IN ('pending','paused','running')
-                AND (owner IS NULL OR lease_until<=?)
-                AND (status!='pending' OR ready_at<=?)"""
-            parameters: list[Any] = [workflow.fingerprint, now, now]
-            if excluded:
-                query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
-                parameters.extend(excluded)
-            query += " ORDER BY created_at,id LIMIT 1"
-            row = self.db.execute(query, parameters).fetchone()
-            return None if row is None else self._claim_locked(row["id"], workflow, ttl)
+            candidates: list[tuple[int, str, Workflow, str]] = []
+            for workflow in workflows:
+                self.db.execute(
+                    """INSERT OR IGNORE INTO queue_policies(fingerprint,name)
+                    VALUES(?,?)""",
+                    (workflow.fingerprint, workflow.name),
+                )
+                policy = self.db.execute(
+                    "SELECT max_active,last_claimed FROM queue_policies WHERE fingerprint=?",
+                    (workflow.fingerprint,),
+                ).fetchone()
+                if policy["max_active"] is not None:
+                    active = self.db.execute(
+                        """SELECT COUNT(*) FROM runs WHERE fingerprint=? AND status='running'
+                        AND owner IS NOT NULL AND lease_until>?""",
+                        (workflow.fingerprint, now),
+                    ).fetchone()[0]
+                    if active >= policy["max_active"]:
+                        continue
+                query = """SELECT id FROM runs WHERE fingerprint=?
+                    AND status IN ('pending','paused','running')
+                    AND (owner IS NULL OR lease_until<=?)
+                    AND (status!='pending' OR ready_at<=?)"""
+                parameters: list[Any] = [workflow.fingerprint, now, now]
+                if excluded:
+                    query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
+                    parameters.extend(excluded)
+                row = self.db.execute(
+                    query + " ORDER BY created_at,id LIMIT 1", parameters
+                ).fetchone()
+                if row is not None:
+                    candidates.append(
+                        (policy["last_claimed"], workflow.fingerprint, workflow, row["id"])
+                    )
+            if not candidates:
+                return None
+            _, _, workflow, run_id = min(candidates, key=lambda item: (item[0], item[1]))
+            lease = self._claim_locked(run_id, workflow, ttl)
+            if lease is None:
+                return None
+            self.db.execute("UPDATE scheduler_clock SET tick=tick+1 WHERE id=1")
+            tick = self.db.execute("SELECT tick FROM scheduler_clock WHERE id=1").fetchone()[0]
+            self.db.execute(
+                "UPDATE queue_policies SET last_claimed=? WHERE fingerprint=?",
+                (tick, workflow.fingerprint),
+            )
+            return workflow, lease
 
     def _claim_locked(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
         run = self.run(run_id)

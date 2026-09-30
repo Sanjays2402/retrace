@@ -127,6 +127,17 @@ must use separate `Store` connections to the same local SQLite file. `Store.clai
 the queue selection and fenced lease assignment one transaction. A crash can still repeat an
 external side effect before its checkpoint; use `Context.idempotency_key` downstream.
 
+Use `Worker(store, (workflow_a, workflow_b), max_runs=4)` for a shared pool. Each claim picks
+the least recently served eligible definition, then its oldest run. This round-robin state is
+persisted in SQLite and shared by competing local processes. A single-definition worker keeps
+its original FIFO behavior. Configure limits with
+`store.configure_queue(workflow, max_active=2, max_queued=100)` or the CLI `queue --configure`
+command. `max_active` caps live leases across workers; `max_queued` bounds pending and paused
+runs at submission time. `Store.create` raises `QueueFull` when full, except that an identical
+submission key returns its existing ID. `Store.queue_stats()` reports counts and
+`oldest_ready_age_seconds`, or `None` when no run is eligible. A direct `Engine.resume` can
+still claim past the worker cap for manual recovery.
+
 Pass `stop_event=asyncio.Event()` and `drain_timeout=30` to `Worker.serve` to request a
 graceful stop. Once the event is set, the worker claims no more runs. It waits up to the
 timeout for owned runs to finish, then cancels remaining coroutines, marks their attempts

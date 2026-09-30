@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0 — 2026-09-29
+
+- Add durable round-robin scheduling across workflow definitions in a shared local worker pool.
+- Enforce per-definition active-run and queued-run limits transactionally across processes.
+- Expose queue depth and oldest eligible wait age through Python and CLI, with schema v4 migration.
+
 ## 0.8.0 — 2026-09-28
 
 - Add durable one-shot signals and task wait gates. Waiting runs release their worker lease;

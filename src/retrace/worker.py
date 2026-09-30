@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from retrace.engine import Engine, RunResult
 from retrace.store import Store
@@ -12,7 +12,7 @@ from retrace.workflow import Workflow
 
 
 class Worker:
-    """Poll one workflow definition and execute up to ``max_runs`` owned runs.
+    """Poll workflow definitions and execute up to ``max_runs`` owned runs.
 
     Every process must open its own Store against the same local SQLite file.
     Runs are claimed transactionally; a dead process's expired leases are
@@ -22,7 +22,7 @@ class Worker:
     def __init__(
         self,
         store: Store,
-        workflow: Workflow,
+        workflow: Workflow | Sequence[Workflow],
         *,
         max_runs: int = 1,
         concurrency: int = 4,
@@ -33,8 +33,14 @@ class Worker:
             raise ValueError("max_runs must be a positive integer")
         if not math.isfinite(poll_interval) or poll_interval <= 0:
             raise ValueError("poll_interval must be finite and positive")
+        workflows = (workflow,) if isinstance(workflow, Workflow) else tuple(workflow)
+        if not workflows or any(not isinstance(item, Workflow) for item in workflows):
+            raise ValueError("at least one Workflow is required")
+        if len({item.fingerprint for item in workflows}) != len(workflows):
+            raise ValueError("workflow definitions must be unique")
         self.store = store
-        self.workflow = workflow
+        self.workflow = workflows[0]
+        self.workflows = workflows
         self.max_runs = max_runs
         self.poll_interval = poll_interval
         self.engine = Engine(store, concurrency=concurrency, lease_ttl=lease_ttl)
@@ -73,13 +79,14 @@ class Worker:
                 while len(active) < self.max_runs and drain_deadline is None:
                     if stop_event is not None and stop_event.is_set():
                         break
-                    lease = self.store.claim_next(
-                        self.workflow, self.engine.lease_ttl, exclude=tuple(active)
+                    claimed = self.store.claim_next_any(
+                        self.workflows, self.engine.lease_ttl, exclude=tuple(active)
                     )
-                    if lease is None:
+                    if claimed is None:
                         break
+                    workflow, lease = claimed
                     active[lease.run_id] = asyncio.create_task(
-                        self.engine._run_claimed(self.workflow, lease)
+                        self.engine._run_claimed(workflow, lease)
                     )
                 if not active:
                     if once or drain_deadline is not None:

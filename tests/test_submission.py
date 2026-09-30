@@ -82,7 +82,7 @@ class SubmissionTests(unittest.TestCase):
                 ("legacy", "old", "1", "legacy-fingerprint", "{}", "null", 1, 1),
             )
         with Store(self.path) as store:
-            self.assertEqual(store.db.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(store.db.execute("PRAGMA user_version").fetchone()[0], 4)
             self.assertEqual(store.run("legacy")["status"], "pending")
             self.assertEqual(store.run("legacy")["ready_at"], 0)
             self.assertIsNone(store.run("legacy")["submission_key_hash"])

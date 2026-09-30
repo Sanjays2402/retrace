@@ -35,12 +35,21 @@ flowchart LR
    pool will poll and reclaim the run after lease expiry; without one, call `resume` explicitly.
 
 `retrace submit` persists a pending run, while `retrace worker` starts a polling process for one
-workflow definition. Each process may own multiple runs, bounded by `--max-runs`; the task
+or more workflow definitions. Each process may own multiple runs, bounded by `--max-runs`; the task
 concurrency limit applies separately inside each run. `--once` drains runs available to that
 worker and exits. It does not wait for another process's live lease to expire. The queue is a
 local SQLite table, not a network broker. Each worker uses its own SQLite connection on the
 same machine and local disk. Worker processes require access to the same workflow code; a
 fingerprint mismatch leaves the run untouched.
+
+For shared pools, `Store.claim_next_any` inspects the oldest eligible run of each loaded
+definition inside one `BEGIN IMMEDIATE` transaction. It excludes definitions at their
+configured live-lease cap and chooses the least recently claimed definition using a durable
+monotonic sequence. The same transaction advances that sequence when assigning the lease.
+`Store.create` checks queue depth under the same write lock before admitting a run, so
+competing producers cannot exceed `max_queued`. Duplicate keyed submissions are resolved
+before admission. This is equal-share fairness among eligible definitions; a worker must
+load each definition it is expected to serve.
 
 On SIGTERM, the CLI worker enters a drain phase: it stops claiming runs, waits for owned
 runs to complete up to `--drain-timeout`, then cancels active coroutines. The engine releases
@@ -208,9 +217,10 @@ and exposes no mutation endpoints. It has no authentication and is not an intern
 
 `runs` stores definition, input, lease, and overall state; `tasks` stores the latest checkpoint;
 `attempts` preserves execution history; `events` is the ordered audit log; `signals` stores
-one payload per run and signal name. Foreign keys are enabled.
-`PRAGMA user_version=3` marks the schema; unknown future versions are refused. Opening an older
-database for writing applies the submission and signal migrations in transactions,
+one payload per run and signal name. `queue_policies` stores per-definition limits and the
+fairness cursor; `scheduler_clock` stores its monotonic sequence. Foreign keys are enabled.
+`PRAGMA user_version=4` marks the schema; unknown future versions are refused. Opening an older
+database for writing applies the submission, signal, and queue migrations in transactions,
 preserving existing runs and checkpoints. Read-only connections do not migrate. Back up
 databases before upgrading alpha versions; a general migration framework is still future work.
 

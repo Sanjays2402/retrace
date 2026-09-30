@@ -141,7 +141,7 @@ class SignalTests(unittest.IsolatedAsyncioTestCase):
         with Store(self.path, readonly=True) as reader:
             self.assertEqual(reader.signals(run_id), [])
         with Store(self.path) as upgraded:
-            self.assertEqual(upgraded.schema_version, 3)
+            self.assertEqual(upgraded.schema_version, 4)
             self.assertTrue(upgraded.signal(run_id, "approval", "ready"))
             self.assertEqual(upgraded.run(run_id)["status"], "pending")
 
