@@ -1,5 +1,7 @@
 """Render the repository's public Markdown guides as static, base-path-safe pages."""
 
+# ruff: noqa: E501  -- keep the inline HTML template readable in source.
+
 from __future__ import annotations
 
 import argparse
@@ -11,16 +13,35 @@ from urllib.parse import urlsplit, urlunsplit
 
 from markdown import Markdown
 
-
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "playground" / "public" / "docs"
 REPO = "https://github.com/Sanjays2402/retrace"
 GUIDES = (
-    ("getting-started", "Quickstart", "Start here", "Install Retrace and recover your first workflow."),
+    (
+        "getting-started",
+        "Quickstart",
+        "Start here",
+        "Install Retrace and recover your first workflow.",
+    ),
     ("examples", "Real integrations", "Start here", "Work through CSV and HTTP delivery examples."),
-    ("choosing-retrace", "Is Retrace a fit?", "Start here", "Check the scope and tradeoffs before adopting it."),
-    ("architecture", "Architecture", "Under the hood", "Explore leases, fencing, checkpoints, and scheduling."),
-    ("recovery", "Recovery contract", "Under the hood", "Understand retries, preserved outputs, and external effects."),
+    (
+        "choosing-retrace",
+        "Is Retrace a fit?",
+        "Start here",
+        "Check the scope and tradeoffs before adopting it.",
+    ),
+    (
+        "architecture",
+        "Architecture",
+        "Under the hood",
+        "Explore leases, fencing, checkpoints, and scheduling.",
+    ),
+    (
+        "recovery",
+        "Recovery contract",
+        "Under the hood",
+        "Understand retries, preserved outputs, and external effects.",
+    ),
     ("api", "API and CLI", "Reference", "Find the Python API and command-line usage."),
     ("benchmark", "Benchmarks", "Reference", "See the method behind the local overhead baseline."),
     ("security", "Security", "Reference", "Read the trust and data-handling boundaries."),
@@ -77,7 +98,7 @@ def nav(active: str | None, *, index: bool = False) -> str:
         links.append(
             f'<a class="doc-nav-link{current_class}" '
             f'href="{prefix}{slug}/"{current_attr}>'
-            f'{html.escape(title)}</a>'
+            f"{html.escape(title)}</a>"
         )
     return "\n".join(links)
 
@@ -88,7 +109,7 @@ def toc_items(tokens: list[dict]) -> str:
         if token["level"] in (2, 3):
             items.append(
                 f'<a class="toc-level-{token["level"]}" href="#{html.escape(token["id"], quote=True)}">'
-                f'{html.escape(token["name"])}</a>'
+                f"{html.escape(token['name'])}</a>"
             )
         items.extend(toc_items_nested(token.get("children", [])))
     return "\n".join(items)
@@ -99,7 +120,7 @@ def toc_items_nested(tokens: list[dict]) -> list[str]:
     for token in tokens:
         result.append(
             f'<a class="toc-level-{token["level"]}" href="#{html.escape(token["id"], quote=True)}">'
-            f'{html.escape(token["name"])}</a>'
+            f"{html.escape(token['name'])}</a>"
         )
         result.extend(toc_items_nested(token.get("children", [])))
     return result
@@ -109,13 +130,18 @@ def document(title: str, description: str, content: str, active: str | None, toc
     index = active is None
     root = "../" if index else "../../"
     docs = "./" if index else "../"
-    source_link = "" if index else (
-        f'<a class="source-link" href="{REPO}/blob/main/'
-        f'{"SECURITY.md" if active == "security" else f"docs/{active}.md"}">Edit source on GitHub ↗</a>'
+    source_link = (
+        ""
+        if index
+        else (
+            f'<a class="source-link" href="{REPO}/blob/main/'
+            f'{"SECURITY.md" if active == "security" else f"docs/{active}.md"}">Edit source on GitHub ↗</a>'
+        )
     )
     toc_html = (
         f'<aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span>{toc}</aside>'
-        if toc else ""
+        if toc
+        else ""
     )
     return f'''<!doctype html>
 <html lang="en">
@@ -139,7 +165,7 @@ def document(title: str, description: str, content: str, active: str | None, toc
     </aside>
     <div class="docs-content">
       <header class="docs-topbar">
-        <div class="crumbs"><a href="{root}">Playground</a><span>/</span><a href="{docs}">Docs</a>{'' if index else f'<span>/</span><strong>{html.escape(title)}</strong>'}</div>
+        <div class="crumbs"><a href="{root}">Playground</a><span>/</span><a href="{docs}">Docs</a>{"" if index else f"<span>/</span><strong>{html.escape(title)}</strong>"}</div>
         <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="{REPO}">GitHub ↗</a></div>
       </header>
       <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav>{nav(active, index=index)}</nav></details>
@@ -157,19 +183,24 @@ def overview() -> str:
     for group in dict.fromkeys(guide[2] for guide in GUIDES):
         cards = "".join(
             f'<a class="doc-card" href="{slug}/"><span>{html.escape(group)}</span>'
-            f'<strong>{html.escape(title)} <b>↗</b></strong><p>{html.escape(description)}</p></a>'
-            for slug, title, section, description in GUIDES if section == group
+            f"<strong>{html.escape(title)} <b>↗</b></strong><p>{html.escape(description)}</p></a>"
+            for slug, title, section, description in GUIDES
+            if section == group
         )
-        groups.append(f'<section class="doc-group"><h2>{html.escape(group)}</h2><div class="doc-card-grid">{cards}</div></section>')
+        groups.append(
+            f'<section class="doc-group"><h2>{html.escape(group)}</h2><div class="doc-card-grid">{cards}</div></section>'
+        )
     content = (
         '<div class="docs-hero"><span class="docs-eyebrow"><i></i> THE RETRACE FIELD GUIDE</span>'
-        '<h1>Build workflows that<br><em>remember their progress.</em></h1>'
-        '<p>Start with a five-minute recovery walkthrough, then explore the contracts '
-        'behind the engine. These pages are built from the repository documentation.</p>'
+        "<h1>Build workflows that<br><em>remember their progress.</em></h1>"
+        "<p>Start with a five-minute recovery walkthrough, then explore the contracts "
+        "behind the engine. These pages are built from the repository documentation.</p>"
         '<a class="start-button" href="getting-started/">Start the quickstart <span>→</span></a></div>'
         + "".join(groups)
     )
-    return document("Documentation", "Guides and reference for the Retrace workflow engine.", content, None)
+    return document(
+        "Documentation", "Guides and reference for the Retrace workflow engine.", content, None
+    )
 
 
 def article(guide: tuple[str, str, str, str], position: int) -> str:
@@ -186,7 +217,7 @@ def article(guide: tuple[str, str, str, str], position: int) -> str:
     steps += "</nav>"
     content = (
         f'<div class="article-hero"><span class="docs-eyebrow"><i></i> {html.escape(group.upper())}</span>'
-        f'<h1>{html.escape(title)}</h1><p>{html.escape(description)}</p></div>'
+        f"<h1>{html.escape(title)}</h1><p>{html.escape(description)}</p></div>"
         f'<article class="markdown-body">{body}</article>{steps}'
     )
     return document(title, description, content, slug, toc_items(tokens))
@@ -215,7 +246,9 @@ def main() -> None:
             files = asset.rglob("*") if asset.is_dir() else [asset]
             for file in files:
                 target = destination / file.relative_to(asset) if asset.is_dir() else destination
-                if file.is_file() and (not target.exists() or target.read_bytes() != file.read_bytes()):
+                if file.is_file() and (
+                    not target.exists() or target.read_bytes() != file.read_bytes()
+                ):
                     raise SystemExit(f"Documentation asset out of date: {file.relative_to(ROOT)}")
         elif asset.is_dir():
             shutil.copytree(asset, destination, dirs_exist_ok=True)
