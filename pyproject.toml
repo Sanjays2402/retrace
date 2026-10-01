@@ -23,7 +23,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["ruff==0.16.7", "coverage==7.16.0", "build==1.6.1"]
+dev = ["ruff==0.16.9", "coverage==7.16.2", "build==1.6.1"]
 
 [project.scripts]
 retrace = "retrace.cli:main"
