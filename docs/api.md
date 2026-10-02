@@ -51,6 +51,35 @@ failures and timeouts, are retryable under the configured budget. Cancellation i
 not treated as a failure. Return JSON-compatible, small values. Task exceptions are persisted
 as a type/message string capped at 4,000 characters; tracebacks are not persisted.
 
+### Classify failures and spread retries
+
+```python
+policy = RetryPolicy(
+    max_attempts=5,
+    initial_delay=0.5,
+    max_delay=15,
+    jitter=True,
+    non_retryable=(ValueError, PermissionError),
+)
+```
+
+`non_retryable` is a tuple of exception **classes**, matched with `isinstance`, including
+subclasses. A matching error records one failed attempt and immediately fails the task;
+its descendants are blocked while independent branches can finish. Other `Exception`
+subclasses keep the configured failure budget. `TimeoutError` can also be excluded.
+Cancellation continues to propagate without consuming that budget.
+
+With `jitter=True`, each retry delay is sampled uniformly from zero up to the capped
+exponential delay. Retrace samples only when scheduling a retry, then commits the absolute
+deadline with the failed attempt and journal event. Reopening or resuming the run reuses
+that deadline. The default `jitter=False` retains deterministic backoff.
+
+Both options belong to the workflow fingerprint. Existing definitions with the defaults
+retain their original fingerprint; enabling either option changes it. Keep the original
+policy available to resume existing runs. Explicit manual retry can reopen a permanent
+failure after its external cause has been corrected; it uses the same classification on
+subsequent attempts.
+
 ## Run and resume
 
 ```python

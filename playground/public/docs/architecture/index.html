@@ -182,8 +182,15 @@ requires no additional schema change. See <a href="../recovery/">the recovery gu
 may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
 and do not consume the failure budget; repeated crashes may therefore create more than three
 attempt records. Manual retry opens a fresh failure budget, so lifetime failures can also exceed
-<code>max_attempts</code>; the attempt journal retains that history. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
-Jitter and exception-specific retry filters are future work.</p>
+<code>max_attempts</code>; the attempt journal retains that history. Backoff is capped and persisted as
+an absolute retry deadline. It is deterministic by default; optional full jitter samples
+uniformly from zero to the cap for that failure count. Sampling happens before the atomic
+failure checkpoint, never while resuming an existing deadline. A crash before that commit
+leaves an interrupted attempt; a crash after it preserves the selected deadline.</p>
+<p>Exception classes in <code>RetryPolicy.non_retryable</code> bypass automatic retry, including their
+subclasses. The attempt still increments the failure count and journals the error. A terminal
+failure blocks descendants while independent branches continue. Both classification and
+jitter settings are fingerprinted; omitted defaults keep preexisting definitions compatible.</p>
 <h2 id="commit-boundary-and-side-effects">Commit boundary and side effects</h2>
 <p>The result, task state, attempt state, and corresponding event commit in one transaction.
 If any write fails, all of those changes roll back. A completed checkpoint is therefore either

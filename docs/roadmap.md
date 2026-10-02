@@ -14,6 +14,8 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 - Idempotent submission keys and delayed run eligibility with a v1-to-v2 schema migration.
 - Durable cancellation for queued and active runs, with lease revocation and preserved checkpoints.
 - Bounded graceful worker drain for local rolling restarts and immediate paused-run handoff.
+- Exception-based retry classification and optional full jitter, with persisted deadlines
+  reused across restarts and compatibility for default-policy workflows.
 
 ## Small, well-scoped contributions
 
@@ -22,8 +24,6 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Design proposals welcome
 
-- **Retry classification and jitter.** Persist the selected retry deadline, with a deterministic
-  test hook and clear treatment of nonretryable errors.
 - **Retention and compaction.** Define what can be removed without breaking checkpoint integrity,
   incremental event cursors, or the recovery contract.
 - **Storage evolution.** Transactional schema migrations with backup/rollback guidance and

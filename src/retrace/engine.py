@@ -114,7 +114,7 @@ class Engine:
             failures = state["failures"] + 1
             retry_at = (
                 time.time() + task.retry.delay(failures)
-                if failures < task.retry.max_attempts
+                if task.retry.can_retry(exc, failures)
                 else None
             )
             error = f"{type(exc).__name__}: {exc}"[:4000]

@@ -150,8 +150,16 @@ requires no additional schema change. See [the recovery guide](recovery.md).
 may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
 and do not consume the failure budget; repeated crashes may therefore create more than three
 attempt records. Manual retry opens a fresh failure budget, so lifetime failures can also exceed
-`max_attempts`; the attempt journal retains that history. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
-Jitter and exception-specific retry filters are future work.
+`max_attempts`; the attempt journal retains that history. Backoff is capped and persisted as
+an absolute retry deadline. It is deterministic by default; optional full jitter samples
+uniformly from zero to the cap for that failure count. Sampling happens before the atomic
+failure checkpoint, never while resuming an existing deadline. A crash before that commit
+leaves an interrupted attempt; a crash after it preserves the selected deadline.
+
+Exception classes in `RetryPolicy.non_retryable` bypass automatic retry, including their
+subclasses. The attempt still increments the failure count and journals the error. A terminal
+failure blocks descendants while independent branches continue. Both classification and
+jitter settings are fingerprinted; omitted defaults keep preexisting definitions compatible.
 
 ## Commit boundary and side effects
 

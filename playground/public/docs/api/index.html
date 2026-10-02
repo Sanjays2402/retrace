@@ -123,6 +123,29 @@ per-attempt timeout: 60 s. Ordinary <code>Exception</code> subclasses, including
 failures and timeouts, are retryable under the configured budget. Cancellation is propagated,
 not treated as a failure. Return JSON-compatible, small values. Task exceptions are persisted
 as a type/message string capped at 4,000 characters; tracebacks are not persisted.</p>
+<h3 id="classify-failures-and-spread-retries">Classify failures and spread retries</h3>
+<pre><code class="language-python">policy = RetryPolicy(
+    max_attempts=5,
+    initial_delay=0.5,
+    max_delay=15,
+    jitter=True,
+    non_retryable=(ValueError, PermissionError),
+)
+</code></pre>
+<p><code>non_retryable</code> is a tuple of exception <strong>classes</strong>, matched with <code>isinstance</code>, including
+subclasses. A matching error records one failed attempt and immediately fails the task;
+its descendants are blocked while independent branches can finish. Other <code>Exception</code>
+subclasses keep the configured failure budget. <code>TimeoutError</code> can also be excluded.
+Cancellation continues to propagate without consuming that budget.</p>
+<p>With <code>jitter=True</code>, each retry delay is sampled uniformly from zero up to the capped
+exponential delay. Retrace samples only when scheduling a retry, then commits the absolute
+deadline with the failed attempt and journal event. Reopening or resuming the run reuses
+that deadline. The default <code>jitter=False</code> retains deterministic backoff.</p>
+<p>Both options belong to the workflow fingerprint. Existing definitions with the defaults
+retain their original fingerprint; enabling either option changes it. Keep the original
+policy available to resume existing runs. Explicit manual retry can reopen a permanent
+failure after its external cause has been corrected; it uses the same classification on
+subsequent attempts.</p>
 <h2 id="run-and-resume">Run and resume</h2>
 <pre><code class="language-python">with Store(&quot;jobs.db&quot;) as store:
     engine = Engine(store, concurrency=4, lease_ttl=15)
@@ -289,6 +312,7 @@ to restore all retained events. Expand Payload to inspect retry/reset metadata.<
 order. The inspector retains only the latest 1,000 events received; its filters do not change
 fetch cursors or discard nonmatching incoming events. For the complete journal, use
 <code>retrace events RUN_ID &gt; events.jsonl</code>. Export is disabled when nothing matches.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../recovery/"><small>← PREVIOUS</small><strong>Recovery contract</strong></a><a href="../benchmark/"><small>NEXT →</small><strong>Benchmarks</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/api.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#define-tasks">Define tasks</a>
+<a class="toc-level-3" href="#classify-failures-and-spread-retries">Classify failures and spread retries</a>
 <a class="toc-level-2" href="#run-and-resume">Run and resume</a>
 <a class="toc-level-2" href="#durable-signals">Durable signals</a>
 <a class="toc-level-2" href="#local-worker-pool">Local worker pool</a>

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `RetryPolicy.non_retryable` to stop automatic retries for permanent errors and subclasses.
+- Add opt-in full jitter, sampled once per retry and persisted across recovery.
+- Preserve workflow fingerprints for existing default policies and document policy compatibility.
+- Add a runnable classified-retry example and recovery tests for jittered deadlines.
+
 ## 0.9.0 — 2026-09-29
 
 - Add durable round-robin scheduling across workflow definitions in a shared local worker pool.

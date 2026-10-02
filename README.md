@@ -246,7 +246,7 @@ asyncio.run(main())
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
-| Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
+| Durable retries | Capped exponential backoff, optional full jitter, and permanent-error classification; retry deadlines survive restarts |
 | Durable signals | One-shot JSON messages can arrive before or after a task waits; waiting runs release their worker lease |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |

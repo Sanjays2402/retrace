@@ -74,8 +74,18 @@ receipt instead of accepting a second delivery. No external account or service i
 persist the key, request identity, effect, and receipt, reject key reuse with a different
 payload, and retain keys for the entire retry/recovery window. Retrace cannot provide
 exactly-once external effects by itself. Threaded blocking HTTP calls may continue after
-async cancellation; downstream idempotency remains necessary.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../getting-started/"><small>← PREVIOUS</small><strong>Quickstart</strong></a><a href="../choosing-retrace/"><small>NEXT →</small><strong>Is Retrace a fit?</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/examples.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#csv-orders">CSV orders</a>
-<a class="toc-level-2" href="#http-delivery-with-an-ambiguous-response">HTTP delivery with an ambiguous response</a></aside></div>
+async cancellation; downstream idempotency remains necessary.</p>
+<h2 id="transient-errors-and-permanent-invalid-input">Transient errors and permanent invalid input</h2>
+<pre><code class="language-sh">retrace run examples.classified_retry:workflow --input '{&quot;count&quot;:128}'
+retrace run examples.classified_retry:workflow --input '{&quot;count&quot;:-1}'
+</code></pre>
+<p>The first command simulates a connection error, retries after a jittered delay, and succeeds
+on attempt two with 128 records. The second raises <code>ValueError</code> and fails after one attempt
+because invalid input is classified as permanent. No external service is called.
+Inspect either printed run ID with <code>retrace inspect RUN_ID</code> or <code>retrace serve</code> to compare
+its attempt history. See <a href="../api/#classify-failures-and-spread-retries">retry policy options</a>.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../getting-started/"><small>← PREVIOUS</small><strong>Quickstart</strong></a><a href="../choosing-retrace/"><small>NEXT →</small><strong>Is Retrace a fit?</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/examples.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#csv-orders">CSV orders</a>
+<a class="toc-level-2" href="#http-delivery-with-an-ambiguous-response">HTTP delivery with an ambiguous response</a>
+<a class="toc-level-2" href="#transient-errors-and-permanent-invalid-input">Transient errors and permanent invalid input</a></aside></div>
       <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
     </div>
   </div>

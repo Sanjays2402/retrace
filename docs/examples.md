@@ -35,3 +35,16 @@ persist the key, request identity, effect, and receipt, reject key reuse with a 
 payload, and retain keys for the entire retry/recovery window. Retrace cannot provide
 exactly-once external effects by itself. Threaded blocking HTTP calls may continue after
 async cancellation; downstream idempotency remains necessary.
+
+## Transient errors and permanent invalid input
+
+```sh
+retrace run examples.classified_retry:workflow --input '{"count":128}'
+retrace run examples.classified_retry:workflow --input '{"count":-1}'
+```
+
+The first command simulates a connection error, retries after a jittered delay, and succeeds
+on attempt two with 128 records. The second raises `ValueError` and fails after one attempt
+because invalid input is classified as permanent. No external service is called.
+Inspect either printed run ID with `retrace inspect RUN_ID` or `retrace serve` to compare
+its attempt history. See [retry policy options](api.md#classify-failures-and-spread-retries).
