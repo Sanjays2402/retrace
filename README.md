@@ -15,13 +15,21 @@ process restart.
 
 **Early alpha.** The failure semantics are explicit and tested; the API may change before 1.0.
 
-![The Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
-
 **Try it now:** [Interactive recovery demo](https://sanjays2402.github.io/retrace/) — no install or account.
 
 **New here?** [Five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/) ·
 [Real CSV and HTTP examples](https://sanjays2402.github.io/retrace/docs/examples/) ·
 [Is Retrace a fit?](https://sanjays2402.github.io/retrace/docs/choosing-retrace/)
+
+### See it in action
+
+[![The public recovery playground paused at an interrupted step, with committed checkpoints and an event journal](docs/assets/recovery-playground.png)](https://sanjays2402.github.io/retrace/#lab)
+
+The **browser playground** walks through a synthetic worker crash and recovery. It runs no real jobs.
+
+![The local Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
+
+The **local inspector** reads real SQLite checkpoints and events from `retrace demo`.
 
 ## Try it in a minute
 
