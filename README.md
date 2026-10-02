@@ -33,6 +33,20 @@ The [interactive recovery playground](https://sanjays2402.github.io/retrace/) ha
 
 The browser playground simulates a worker crash and recovery; it runs no real jobs. After installation, `retrace serve` opens the local inspector for real SQLite checkpoints and events.
 
+### See the workflow
+
+In the [recovery lab](https://sanjays2402.github.io/retrace/#lab), the worker stops after two checkpoints. A new worker reuses them, reruns the interrupted step, and commits the remaining work.
+
+| Worker interrupted · green | Run recovered · blue |
+| :---: | :---: |
+| [![Workflow interrupted with two committed checkpoints and no output from the interrupted step](docs/assets/feature-interrupted.png)](docs/assets/feature-interrupted.png) | [![Workflow succeeded after a second worker reused two checkpoints and committed all four steps](docs/assets/feature-recovered.png)](docs/assets/feature-recovered.png) |
+
+The [signals lab](https://sanjays2402.github.io/retrace/#signals) shows an approval gate waiting without holding a worker or spending an attempt budget.
+
+[![Signal-gated release workflow waiting for approval, with no worker held](docs/assets/feature-signal-wait.png)](docs/assets/feature-signal-wait.png)
+
+These screenshots show browser simulations. The Python engine and local inspector persist actual runs to SQLite.
+
 ## Try it in a minute
 
 Requires **Python 3.11+**. Install from the repository; this project is not yet published to PyPI.

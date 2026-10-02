@@ -1,4 +1,4 @@
-// Capture the four selectable themes from the published GitHub Pages playground.
+// Capture the four themes and three interactive states from GitHub Pages.
 // Run from the repository root: node scripts/capture_readme_screenshots.mjs
 import { chromium } from "@playwright/test";
 import { resolve } from "node:path";
@@ -40,6 +40,47 @@ try {
     } finally {
       await context.close();
     }
+  }
+
+  const context = await browser.newContext({
+    viewport: { width: 1512, height: 1024 },
+    deviceScaleFactor: 1,
+    colorScheme: "dark",
+    reducedMotion: "reduce",
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(site, { waitUntil: "networkidle" });
+    const lab = page.locator("#lab");
+    await lab
+      .getByRole("button", { name: "Go to event 5:", exact: false })
+      .click();
+    await lab.locator(".node").nth(2).click();
+    await lab.screenshot({
+      path: resolve("docs/assets/feature-interrupted.png"),
+      animations: "disabled",
+    });
+
+    await page.getByRole("button", { name: "Blue theme" }).click();
+    await lab
+      .getByRole("button", { name: "Go to event 8:", exact: false })
+      .click();
+    await lab.locator(".node").first().click();
+    await lab.screenshot({
+      path: resolve("docs/assets/feature-recovered.png"),
+      animations: "disabled",
+    });
+
+    await page.getByRole("button", { name: "Yellow theme" }).click();
+    await page.getByRole("button", { name: "Switch to light theme" }).click();
+    const signals = page.locator("#signals");
+    await signals.getByRole("button", { name: "Start run" }).click();
+    await signals.screenshot({
+      path: resolve("docs/assets/feature-signal-wait.png"),
+      animations: "disabled",
+    });
+  } finally {
+    await context.close();
   }
 } finally {
   await browser.close();
