@@ -21,15 +21,17 @@ process restart.
 [Real CSV and HTTP examples](https://sanjays2402.github.io/retrace/docs/examples/) ·
 [Is Retrace a fit?](https://sanjays2402.github.io/retrace/docs/choosing-retrace/)
 
-### See it in action
+### Pick your view
 
-[![The public recovery playground paused at an interrupted step, with committed checkpoints and an event journal](docs/assets/recovery-playground.png)](https://sanjays2402.github.io/retrace/#lab)
+The [interactive recovery playground](https://sanjays2402.github.io/retrace/) has four accent colors and light and dark modes. Select a preview to see it at full size.
 
-The **browser playground** walks through a synthetic worker crash and recovery. It runs no real jobs.
+| Green · dark | Red · light |
+| :---: | :---: |
+| [![Retrace recovery playground in shining green dark mode](docs/assets/theme-green.png)](docs/assets/theme-green.png) | [![Retrace recovery playground in red light mode](docs/assets/theme-red.png)](docs/assets/theme-red.png) |
+| Yellow · light | Blue · dark |
+| [![Retrace recovery playground in yellow light mode](docs/assets/theme-yellow.png)](docs/assets/theme-yellow.png) | [![Retrace recovery playground in blue dark mode](docs/assets/theme-blue.png)](docs/assets/theme-blue.png) |
 
-![The local Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
-
-The **local inspector** reads real SQLite checkpoints and events from `retrace demo`.
+The browser playground simulates a worker crash and recovery; it runs no real jobs. After installation, `retrace serve` opens the local inspector for real SQLite checkpoints and events.
 
 ## Try it in a minute
 
