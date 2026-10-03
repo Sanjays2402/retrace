@@ -454,3 +454,30 @@ test("history changes made during a slow poll are fetched afterward", async ({
   await expect(page.locator(".run-card")).toHaveCount(200);
   await expect(page.locator("#load-runs")).toBeEnabled();
 });
+
+test("diagnostic report downloads omit application data and follow selection", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator(".run-card").filter({ hasText: "html-output" }).click();
+  await expect(page.locator("#workflow-name")).toHaveText("html-output");
+  const pending = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download report" }).click();
+  const download = await pending;
+  const chunks = [];
+  for await (const chunk of await download.createReadStream())
+    chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString();
+  const report = JSON.parse(text);
+  expect(report.run.name).toBe("html-output");
+  expect(report.includes_payloads).toBe(false);
+  expect(report.tasks.output.status).toBe("succeeded");
+  expect(report.tasks.output).not.toHaveProperty("output");
+  expect(text).not.toContain("window.pwned");
+  expect(download.suggestedFilename()).toContain(report.run.id);
+  await page.locator(".run-card").filter({ hasText: "failed-run" }).click();
+  await expect(page.locator("#download-report")).not.toHaveAttribute(
+    "href",
+    `/api/runs/${report.run.id}/report`,
+  );
+});

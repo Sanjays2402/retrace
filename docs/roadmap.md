@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Downloadable diagnostic reports with default payload omission, coherent run snapshots,
+  and explicit recent-journal truncation metadata.
+
 - Expand live inspector history beyond the initial 100 runs, with bounded loading and
   filters across the loaded list.
 

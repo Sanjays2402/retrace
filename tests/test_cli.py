@@ -43,6 +43,24 @@ class CLITests(unittest.TestCase):
         with Store(destination, readonly=True) as restored:
             self.assertEqual(len(restored.runs()), 1)
 
+    def test_diagnostic_report_is_readonly_and_payloads_are_opt_in(self):
+        self.assertEqual(self.invoke("report", "missing")[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        result = json.loads(
+            self.invoke("run", "examples.pipeline:workflow", "--input", '{"values":[2,4]}')[1]
+        )
+        run_id = result["run_id"]
+        code, out, err = self.invoke("report", run_id, "--event-limit", "2")
+        self.assertEqual(code, 0, err)
+        report = json.loads(out)
+        self.assertNotIn("input", report["run"])
+        self.assertNotIn("output", report["tasks"]["total"])
+        self.assertEqual(len(report["journal"]["events"]), 2)
+        self.assertTrue(report["journal"]["truncated"])
+        full = json.loads(self.invoke("report", run_id, "--include-payloads")[1])
+        self.assertEqual(full["tasks"]["total"]["output"], 6)
+        self.assertEqual(self.invoke("report", run_id, "--event-limit", "1001")[0], 2)
+
     def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
         self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
         self.assertFalse(Path(self.db).exists())

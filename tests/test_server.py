@@ -111,6 +111,22 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len([e for e in trace["traceEvents"] if e["ph"] == "X"]), 1)
         self.assertNotIn("<script>", body.decode())
         self.assertEqual(self.request("/api/runs/missing/trace")[0], 404)
+
+    def test_report_route_always_omits_payloads_and_respects_host_checks(self):
+        status, _, body = self.request(f"/api/runs/{self.run_id}/report?include_payloads=true")
+        self.assertEqual(status, 200)
+        report = json.loads(body)
+        self.assertFalse(report["includes_payloads"])
+        self.assertNotIn("<script>", body.decode())
+        self.assertNotIn("output", report["tasks"]["step"])
+        self.assertEqual(report["run"]["id"], self.run_id)
+        self.assertEqual(self.request("/api/runs/missing/report")[0], 404)
+        self.assertEqual(
+            self.request(
+                f"/api/runs/{self.run_id}/report", headers={"Origin": "https://evil.example"}
+            )[0],
+            403,
+        )
         self.assertEqual(
             self.request(
                 f"/api/runs/{self.run_id}/trace", headers={"Origin": "https://evil.example"}

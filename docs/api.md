@@ -260,6 +260,46 @@ Run status can change between requests, so pagination is a live view, not a froz
 Stop when a page is empty. Limits retain the existing bounds of 1–1000 (default 100).
 Queries remain read-only and return the existing JSON array of summaries.
 
+## Export a diagnostic report
+
+Use **Download report** in the local inspector to save a JSON snapshot of the selected
+run, its definition, checkpoint metadata, complete attempt history, signal names, and recent
+journal events. The CLI and Python API offer the same report:
+
+```bash
+retrace --db jobs.db report <RUN_ID> > run.report.json
+retrace --db jobs.db report <RUN_ID> --event-limit 100 > recent.report.json
+# Explicitly include application data for your own investigation:
+retrace --db jobs.db report <RUN_ID> --include-payloads > full.report.json
+```
+
+```python
+from retrace.report import export_report
+
+with Store("jobs.db", readonly=True) as store:
+    report = export_report(store, run_id, event_limit=100)
+```
+
+Default reports omit workflow input, task outputs, signal payloads, all event payloads,
+and task/attempt exception messages. `--include-payloads` includes those values; worker
+owner tokens and submission key hashes are always excluded. Run IDs, workflow/task/signal
+names, function identifiers, versions, timings, and status remain visible in either mode.
+Review these identifiers before sharing a report. The inspector's report route always uses
+the default policy; query parameters cannot enable application payloads.
+
+`report_version` identifies the JSON format (currently 1), and `schema_version` identifies
+the source database schema. `includes_payloads` records the export policy. `journal.events`
+contains the latest `event_limit` events in ascending ID order; `journal.total`, `limit`,
+and `truncated` describe the retained database journal and any export truncation. Limits
+must be integers from 1 to 1,000; default 1,000. Task and attempt history is complete.
+Use `retrace events` for the full journal. Whole-run retention can already have removed
+other runs; an unknown or pruned run returns an error.
+
+Export reads all tables in one transaction so concurrent worker updates cannot mix
+different run states in the report. It does not import workflow code, migrate the database,
+or change checkpoints. Call the Python exporter outside an existing transaction. Reports
+are for diagnosis; use a database backup to restore execution.
+
 ## Back up and restore a database
 
 ```bash
@@ -387,7 +427,7 @@ retrace --db jobs.db serve --port 7760
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`runs`, `inspect`, `events`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
+`runs`, `inspect`, `events`, `report`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
@@ -419,6 +459,7 @@ The local server starts only if the database exists. It serves:
   exact `workflow`, and exclusive `before` run-ID parameters filter and page results,
   e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
+- `GET /api/runs/{id}/report`: a diagnostic report without application payloads or errors.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 
 All responses are JSON with `Cache-Control: no-store`. Read-only requests open their own database

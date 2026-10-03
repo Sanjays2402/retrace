@@ -117,6 +117,14 @@ def parser() -> argparse.ArgumentParser:
     events.add_argument("--after", type=int, default=0, help="exclusive event cursor")
     trace = commands.add_parser("trace", help="export Chrome Trace JSON for Perfetto")
     trace.add_argument("run_id")
+    report = commands.add_parser("report", help="export a diagnostic run report without payloads")
+    report.add_argument("run_id")
+    report.add_argument(
+        "--include-payloads", action="store_true", help="include application data and errors"
+    )
+    report.add_argument(
+        "--event-limit", type=int, default=1000, help="latest journal events (1–1000)"
+    )
     backup = commands.add_parser("backup", help="save a checked standalone database snapshot")
     backup.add_argument("destination", help="new backup file; existing paths are never overwritten")
     backup.add_argument(
@@ -145,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
             serve(args.db, args.port)
             return 0
         readonly = (
-            args.command in ("runs", "inspect", "events", "trace", "backup")
+            args.command in ("runs", "inspect", "events", "trace", "report", "backup")
             or (args.command == "queue" and args.configure is None)
             or (args.command == "retry" and args.dry_run)
             or (args.command == "prune" and not args.apply)
@@ -179,6 +187,20 @@ def main(argv: list[str] | None = None) -> int:
                 from retrace.trace import export_trace
 
                 print(json.dumps(export_trace(store, args.run_id), allow_nan=False))
+            elif args.command == "report":
+                from retrace.report import export_report
+
+                print(
+                    json.dumps(
+                        export_report(
+                            store,
+                            args.run_id,
+                            include_payloads=args.include_payloads,
+                            event_limit=args.event_limit,
+                        ),
+                        indent=2,
+                    )
+                )
             elif args.command == "backup":
                 print(
                     json.dumps(

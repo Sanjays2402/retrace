@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add diagnostic report downloads to the inspector, a read-only `report` CLI, and Python export API.
+- Omit application payloads and exception messages by default, with explicit CLI/Python opt-in.
+- Export a coherent snapshot with complete attempt history and a bounded journal with truncation metadata.
+
 - Add live inspector history expansion in 100-run batches up to 1,000 runs, with a reset control.
 - Keep search, attention filters, and counts aligned with the loaded history; add browser tests
   for filtering, refresh persistence, reset, and the bounded list.

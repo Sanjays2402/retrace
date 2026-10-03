@@ -9,6 +9,7 @@ from importlib.resources import files
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from retrace.report import export_report
 from retrace.store import Store
 from retrace.trace import export_trace
 
@@ -68,6 +69,9 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
             parts = url.path.strip("/").split("/")
             try:
                 with Store(path, readonly=True) as store:
+                    if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "report":
+                        self.send_json(200, export_report(store, unquote(parts[2])))
+                        return
                     if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "trace":
                         self.send_json(200, export_trace(store, unquote(parts[2])))
                         return
