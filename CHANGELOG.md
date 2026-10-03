@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+- Add database-level run history filters for status and exact workflow name in Python, CLI, and inspector API.
+- Add exclusive run-ID pagination with deterministic timestamp tie-breaking and stable pages under new submissions.
+- Preserve existing listing response formats and read-only access; validate filters and missing cursors.
+
+- Add `Store.backup` and a read-only-source `backup` CLI for standalone SQLite snapshots.
+- Include committed WAL state, verify integrity and foreign keys, and publish without overwriting files.
+- Add backup copy timeouts, temporary-file cleanup, and checkpoint restore/concurrent-writer tests.
+
+- Add whole-run retention with `Store.prune_plan`, `Store.prune`, and a preview-first `prune` CLI.
+- Protect unfinished and keyed runs; delete selected terminal runs and dependent records atomically.
+- Preserve event cursors and submission-key deduplication across cleanup batches.
+
+- Add `RetryPolicy.non_retryable` to stop automatic retries for permanent errors and subclasses.
+- Add opt-in full jitter, sampled once per retry and persisted across recovery.
+- Preserve workflow fingerprints for existing default policies and document policy compatibility.
+- Add a runnable classified-retry example and recovery tests for jittered deadlines.
+
+## 0.9.0 — 2026-09-29
+
+- Add durable round-robin scheduling across workflow definitions in a shared local worker pool.
+- Enforce per-definition active-run and queued-run limits transactionally across processes.
+- Expose queue depth and oldest eligible wait age through Python and CLI, with schema v4 migration.
+
 ## 0.8.0 — 2026-09-28
 
 - Add durable one-shot signals and task wait gates. Waiting runs release their worker lease;
@@ -10,6 +35,9 @@
   the demo, and an accessible event rail for jumping between recovery phases.
 - Add an interactive durable-signals lab showing wait, early delivery, worker release, and resume.
 - Refine the Retrace mark across the website, favicon, and local inspector.
+- Add selectable red, yellow, and blue website palettes while retaining the original green,
+  with independent light/dark preference and local persistence.
+- Add search to the recovery event journal, combinable with the selected-step filter.
 
 ## 0.7.1 — 2026-09-28
 

@@ -72,6 +72,20 @@ class ServerTests(unittest.TestCase):
             status, _, _ = self.request("/api/runs", headers=headers)
             self.assertEqual(status, 403)
 
+    def test_run_search_filters_pagination_and_errors(self):
+        with Store(self.path) as store:
+            pending = store.create(Workflow("other", (Task("step", value),)), {})
+        status, _, body = self.request("/api/runs?status=succeeded&workflow=test&limit=1")
+        self.assertEqual(status, 200)
+        self.assertEqual([r["id"] for r in json.loads(body)["runs"]], [self.run_id])
+        status, _, body = self.request(f"/api/runs?before={pending}&status=succeeded&status=failed")
+        self.assertEqual(status, 200)
+        self.assertEqual([r["id"] for r in json.loads(body)["runs"]], [self.run_id])
+        self.assertEqual(json.loads(self.request("/api/runs?status=waiting")[2])["runs"], [])
+        for query in ("status=typo", "limit=nope", "workflow=", "status="):
+            self.assertEqual(self.request("/api/runs?" + query)[0], 400)
+        self.assertEqual(self.request("/api/runs?before=missing")[0], 404)
+
     def test_no_mutations_traversal_or_unknown_routes(self):
         for path, expected in (
             ("/api/runs/missing", 404),

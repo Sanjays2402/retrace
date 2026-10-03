@@ -74,7 +74,18 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
                     # A read transaction gives the UI a coherent multi-table snapshot.
                     store.db.execute("BEGIN")
                     if parts == ["api", "runs"]:
-                        self.send_json(200, {"runs": store.runs()})
+                        query = parse_qs(url.query, keep_blank_values=True)
+                        self.send_json(
+                            200,
+                            {
+                                "runs": store.runs(
+                                    limit=int(query.get("limit", ["100"])[0]),
+                                    statuses=query.get("status"),
+                                    workflow=query.get("workflow", [None])[0],
+                                    before=query.get("before", [None])[0],
+                                )
+                            },
+                        )
                     elif len(parts) in (3, 4) and parts[:2] == ["api", "runs"]:
                         run_id = unquote(parts[2])
                         run = store.run(run_id)

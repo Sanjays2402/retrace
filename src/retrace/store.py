@@ -9,11 +9,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import sqlite3
+import tempfile
 import time
 import uuid
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from graphlib import TopologicalSorter
 from pathlib import Path
@@ -34,6 +36,10 @@ class DefinitionMismatch(ValueError):
     """Resuming with a changed workflow would invalidate checkpoints."""
 
 
+class QueueFull(RuntimeError):
+    """A workflow's configured pending-run limit has been reached."""
+
+
 @dataclass(frozen=True)
 class Lease:
     run_id: str
@@ -51,6 +57,27 @@ class RetryPlan:
     preserved: tuple[str, ...]
     remaining_failed: tuple[str, ...]
     remaining_blocked: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PrunePlan:
+    """Cleanup preview or receipt; previews do not reserve runs for deletion."""
+
+    before: float
+    run_ids: tuple[str, ...]
+    tasks: int
+    attempts: int
+    events: int
+    signals: int
+    protected_keyed_runs: int
+
+
+@dataclass(frozen=True)
+class BackupResult:
+    path: str
+    size_bytes: int
+    schema_version: int
+    runs: int
 
 
 _SCHEMA = """
@@ -109,7 +136,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1, 2, 3):
+        if version not in (0, 1, 2, 3, 4):
             self.db.close()
             raise ValueError(f"unsupported database schema version: {version}")
         if not readonly:
@@ -144,6 +171,20 @@ class Store:
                         PRIMARY KEY (run_id, name))"""
                     )
                     self.db.execute("PRAGMA user_version=3")
+            if version < 4:
+                with self.transaction():
+                    self.db.execute(
+                        """CREATE TABLE IF NOT EXISTS queue_policies (
+                        fingerprint TEXT PRIMARY KEY, name TEXT NOT NULL,
+                        max_active INTEGER, max_queued INTEGER,
+                        last_claimed INTEGER NOT NULL DEFAULT 0)"""
+                    )
+                    self.db.execute(
+                        """CREATE TABLE IF NOT EXISTS scheduler_clock (
+                        id INTEGER PRIMARY KEY CHECK(id=1), tick INTEGER NOT NULL)"""
+                    )
+                    self.db.execute("INSERT OR IGNORE INTO scheduler_clock VALUES(1,0)")
+                    self.db.execute("PRAGMA user_version=4")
         self.schema_version = self.db.execute("PRAGMA user_version").fetchone()[0]
 
     def close(self) -> None:
@@ -154,6 +195,69 @@ class Store:
 
     def __exit__(self, *_: Any) -> None:
         self.close()
+
+    def backup(self, destination: str | Path, *, timeout: float = 30.0) -> BackupResult:
+        """Publish a checked standalone snapshot without overwriting an existing path.
+
+        Uses SQLite's online backup API to include committed WAL data. Call
+        outside a transaction; a read-only source connection is supported.
+        The copy deadline is checked between backup iterations, including lock retries.
+        """
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("backup timeout must be finite and positive")
+        if self.db.in_transaction:
+            raise ValueError("backup must be called outside a transaction")
+        destination = Path(destination).absolute()
+        if any(
+            os.path.lexists(str(destination) + suffix)
+            for suffix in ("", "-wal", "-shm", "-journal")
+        ):
+            raise FileExistsError(
+                f"backup destination or SQLite sidecars already exist: {destination}"
+            )
+        if self.path != ":memory:":
+            source = Path(self.path).resolve()
+            if destination.resolve() in {
+                Path(str(source) + suffix) for suffix in ("", "-wal", "-shm", "-journal")
+            }:
+                raise ValueError("backup destination cannot be the source database or its sidecars")
+        descriptor, name = tempfile.mkstemp(
+            prefix=".retrace-backup-", suffix=".db", dir=destination.parent
+        )
+        os.close(descriptor)
+        temporary = Path(name)
+        try:
+            deadline = time.monotonic() + timeout
+
+            def progress(_status: int, _remaining: int, _total: int) -> None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("backup copy exceeded its timeout")
+
+            with closing(sqlite3.connect(temporary, isolation_level=None)) as snapshot:
+                self.db.backup(snapshot, pages=256, progress=progress, sleep=0.05)
+                # Consolidate the copy into one file, independent of source WAL files.
+                snapshot.execute("PRAGMA journal_mode=DELETE")
+                if snapshot.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise sqlite3.DatabaseError("backup failed integrity check")
+                if snapshot.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise sqlite3.DatabaseError("backup failed foreign key check")
+                version = snapshot.execute("PRAGMA user_version").fetchone()[0]
+                runs = snapshot.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+            with temporary.open("r+b") as file:
+                os.fsync(file.fileno())
+            result = BackupResult(str(destination), temporary.stat().st_size, version, runs)
+            # A hard link publishes only a complete file and fails if another
+            # process created the destination since our initial existence check.
+            os.link(temporary, destination)
+            return result
+        finally:
+            for suffix in ("", "-wal", "-shm", "-journal"):
+                Path(str(temporary) + suffix).unlink(missing_ok=True)
 
     @contextmanager
     def transaction(self, *, immediate: bool = True) -> Iterator[None]:
@@ -170,6 +274,73 @@ class Store:
             "INSERT INTO events(run_id,task_name,kind,at,payload) VALUES(?,?,?,?,?)",
             (run_id, task, kind, time.time(), encode(payload)),
         )
+
+    def _prune_plan(self, before: float, limit: int, include_failed: bool) -> PrunePlan:
+        if self.schema_version < 4:
+            raise ValueError("cleanup requires schema v4; open the database for writing to migrate")
+        if (
+            isinstance(before, bool)
+            or not isinstance(before, (int, float))
+            or not math.isfinite(before)
+            or before < 0
+        ):
+            raise ValueError("before must be a finite nonnegative timestamp")
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("cleanup limit must be an integer between 1 and 500")
+        if type(include_failed) is not bool:
+            raise ValueError("include_failed must be a boolean")
+        statuses = (
+            ("succeeded", "cancelled", "failed") if include_failed else ("succeeded", "cancelled")
+        )
+        marks = ",".join("?" for _ in statuses)
+        eligible = f"status IN ({marks}) AND updated_at<? AND owner IS NULL"
+        parameters = (*statuses, before)
+        protected = self.db.execute(
+            f"SELECT COUNT(*) FROM runs WHERE {eligible} AND submission_key_hash IS NOT NULL",
+            parameters,
+        ).fetchone()[0]
+        ids = tuple(
+            row[0]
+            for row in self.db.execute(
+                f"SELECT id FROM runs WHERE {eligible} AND submission_key_hash IS NULL "
+                "ORDER BY updated_at,id LIMIT ?",
+                (*parameters, limit),
+            )
+        )
+        counts = []
+        for table in ("tasks", "attempts", "events", "signals"):
+            placeholders = ",".join("?" for _ in ids)
+            count = (
+                self.db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE run_id IN ({placeholders})", ids
+                ).fetchone()[0]
+                if ids
+                else 0
+            )
+            counts.append(count)
+        return PrunePlan(float(before), ids, *counts, protected)
+
+    def prune_plan(
+        self, before: float, *, limit: int = 100, include_failed: bool = False
+    ) -> PrunePlan:
+        """Preview whole terminal runs older than a Unix timestamp, without changing storage."""
+        with self.transaction(immediate=False):
+            return self._prune_plan(before, limit, include_failed)
+
+    def prune(self, before: float, *, limit: int = 100, include_failed: bool = False) -> PrunePlan:
+        """Atomically remove eligible unkeyed runs and all their dependent records.
+
+        Select again under the write lock; active, unfinished, and keyed runs
+        are always protected. Freed pages remain reusable inside SQLite.
+        """
+        with self.transaction():
+            plan = self._prune_plan(before, limit, include_failed)
+            for table in ("events", "signals", "attempts", "tasks", "runs"):
+                column = "id" if table == "runs" else "run_id"
+                self.db.executemany(
+                    f"DELETE FROM {table} WHERE {column}=?", ((run_id,) for run_id in plan.run_ids)
+                )
+            return plan
 
     def create(
         self,
@@ -214,6 +385,18 @@ class Store:
                     if caller_run_id is not None and existing["id"] != caller_run_id:
                         raise ValueError("submission key already belongs to another run ID")
                     return existing["id"]
+            policy = self.db.execute(
+                "SELECT max_queued FROM queue_policies WHERE fingerprint=?",
+                (workflow.fingerprint,),
+            ).fetchone()
+            if policy is not None and policy["max_queued"] is not None:
+                queued = self.db.execute(
+                    """SELECT COUNT(*) FROM runs WHERE fingerprint=?
+                    AND status IN ('pending','paused')""",
+                    (workflow.fingerprint,),
+                ).fetchone()[0]
+                if queued >= policy["max_queued"]:
+                    raise QueueFull(f"queue full for {workflow.name}: {queued} queued runs")
             self.db.execute(
                 """INSERT INTO runs(id,name,version,fingerprint,manifest,input,status,
                 created_at,updated_at,submission_key_hash,ready_at)
@@ -316,13 +499,45 @@ class Store:
             self._event(run_id, "signal.received", name=name)
             return True
 
-    def runs(self, limit: int = 100) -> list[dict[str, Any]]:
+    def runs(
+        self,
+        limit: int = 100,
+        *,
+        statuses: Sequence[str] | None = None,
+        workflow: str | None = None,
+        before: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List newest runs; before is an exclusive run-ID pagination cursor."""
+        if type(limit) is not int:
+            raise ValueError("run limit must be an integer")
+        clauses = []
+        parameters: list[Any] = []
+        if statuses is not None:
+            valid = {"pending", "running", "paused", "waiting", "succeeded", "failed", "cancelled"}
+            if isinstance(statuses, str) or not statuses or any(s not in valid for s in statuses):
+                raise ValueError("statuses must be a nonempty sequence of valid run statuses")
+            clauses.append(f"status IN ({','.join('?' for _ in statuses)})")
+            parameters.extend(statuses)
+        if workflow is not None:
+            if not isinstance(workflow, str) or not workflow:
+                raise ValueError("workflow must be a nonempty name")
+            clauses.append("name=?")
+            parameters.append(workflow)
+        if before is not None:
+            cursor = self.db.execute(
+                "SELECT created_at,id FROM runs WHERE id=?", (before,)
+            ).fetchone()
+            if cursor is None:
+                raise KeyError(before)
+            clauses.append("(created_at,id)<(?,?)")
+            parameters.extend((cursor["created_at"], cursor["id"]))
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
         return [
             dict(row)
             for row in self.db.execute(
-                """SELECT id,name,version,status,created_at,updated_at,lease_until,epoch
-            FROM runs ORDER BY created_at DESC LIMIT ?""",
-                (min(max(limit, 1), 1000),),
+                "SELECT id,name,version,status,created_at,updated_at,lease_until,epoch "
+                f"FROM runs{where} ORDER BY created_at DESC,id DESC LIMIT ?",
+                (*parameters, min(max(limit, 1), 1000)),
             )
         ]
 
@@ -461,25 +676,137 @@ class Store:
     def claim_next(
         self, workflow: Workflow, ttl: float, *, exclude: Sequence[str] = ()
     ) -> Lease | None:
-        """Atomically claim the oldest eligible run for this exact workflow definition.
+        """Atomically claim the oldest eligible run of one definition."""
+        claimed = self.claim_next_any((workflow,), ttl, exclude=exclude)
+        return None if claimed is None else claimed[1]
 
-        The selection and ownership change share one write transaction, so competing
-        processes cannot both acquire a pending or expired run.
+    def configure_queue(
+        self, workflow: Workflow, *, max_active: int | None, max_queued: int | None
+    ) -> None:
+        """Persist admission and active-lease limits for an exact definition."""
+        for label, value in (("max_active", max_active), ("max_queued", max_queued)):
+            if value is not None and (type(value) is not int or value < 1):
+                raise ValueError(f"{label} must be a positive integer or None")
+        with self.transaction():
+            self.db.execute(
+                """INSERT INTO queue_policies(fingerprint,name,max_active,max_queued)
+                VALUES(?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET
+                name=excluded.name,max_active=excluded.max_active,
+                max_queued=excluded.max_queued""",
+                (workflow.fingerprint, workflow.name, max_active, max_queued),
+            )
+
+    def queue_stats(self) -> list[dict[str, Any]]:
+        """Point-in-time queue depth, live leases, and oldest eligible wait by definition."""
+        now = time.time()
+        if self.schema_version < 4:
+            rows = self.db.execute(
+                "SELECT DISTINCT fingerprint,name,NULL AS max_active,NULL AS max_queued FROM runs"
+            ).fetchall()
+        else:
+            rows = self.db.execute(
+                """SELECT fingerprint,name,max_active,max_queued FROM queue_policies
+                UNION SELECT fingerprint,name,NULL,NULL FROM runs
+                WHERE fingerprint NOT IN (SELECT fingerprint FROM queue_policies)"""
+            ).fetchall()
+        result = []
+        for row in rows:
+            counts = self.db.execute(
+                """SELECT
+                SUM(CASE WHEN status='pending' AND ready_at<=? THEN 1 ELSE 0 END) AS ready,
+                SUM(CASE WHEN status='pending' AND ready_at>? THEN 1 ELSE 0 END) AS delayed,
+                SUM(CASE WHEN status='paused' THEN 1 ELSE 0 END) AS paused,
+                SUM(CASE WHEN status='waiting' THEN 1 ELSE 0 END) AS waiting,
+                SUM(CASE WHEN status='running' AND owner IS NOT NULL
+                    AND lease_until>? THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN status='running' AND lease_until<=? THEN 1 ELSE 0 END) AS recoverable,
+                MIN(CASE WHEN status='pending' AND ready_at<=? THEN MAX(created_at,ready_at)
+                    WHEN status='paused' THEN updated_at
+                    WHEN status='running' AND lease_until<=? THEN lease_until END) AS oldest
+                FROM runs WHERE fingerprint=?""",
+                (now, now, now, now, now, now, row["fingerprint"]),
+            ).fetchone()
+            result.append(
+                {
+                    "fingerprint": row["fingerprint"],
+                    "name": row["name"],
+                    "max_active": row["max_active"],
+                    "max_queued": row["max_queued"],
+                    "ready": counts["ready"] or 0,
+                    "delayed": counts["delayed"] or 0,
+                    "paused": counts["paused"] or 0,
+                    "waiting": counts["waiting"] or 0,
+                    "active": counts["active"] or 0,
+                    "recoverable": counts["recoverable"] or 0,
+                    "oldest_ready_age_seconds": None
+                    if counts["oldest"] is None
+                    else max(0.0, now - counts["oldest"]),
+                }
+            )
+        return sorted(result, key=lambda item: (item["name"], item["fingerprint"]))
+
+    def claim_next_any(
+        self, workflows: Sequence[Workflow], ttl: float, *, exclude: Sequence[str] = ()
+    ) -> tuple[Workflow, Lease] | None:
+        """Claim from the least recently served eligible definition in one transaction.
+
+        A global SQLite sequence gives equal-share round-robin scheduling across
+        competing local worker processes, while preserving FIFO within a definition.
         """
+        if not workflows:
+            raise ValueError("at least one workflow is required")
+        if len({workflow.fingerprint for workflow in workflows}) != len(workflows):
+            raise ValueError("workflow definitions must be unique")
         excluded = tuple(exclude)
         with self.transaction():
             now = time.time()
-            query = """SELECT id FROM runs WHERE fingerprint=?
-                AND status IN ('pending','paused','running')
-                AND (owner IS NULL OR lease_until<=?)
-                AND (status!='pending' OR ready_at<=?)"""
-            parameters: list[Any] = [workflow.fingerprint, now, now]
-            if excluded:
-                query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
-                parameters.extend(excluded)
-            query += " ORDER BY created_at,id LIMIT 1"
-            row = self.db.execute(query, parameters).fetchone()
-            return None if row is None else self._claim_locked(row["id"], workflow, ttl)
+            candidates: list[tuple[int, str, Workflow, str]] = []
+            for workflow in workflows:
+                self.db.execute(
+                    """INSERT OR IGNORE INTO queue_policies(fingerprint,name)
+                    VALUES(?,?)""",
+                    (workflow.fingerprint, workflow.name),
+                )
+                policy = self.db.execute(
+                    "SELECT max_active,last_claimed FROM queue_policies WHERE fingerprint=?",
+                    (workflow.fingerprint,),
+                ).fetchone()
+                if policy["max_active"] is not None:
+                    active = self.db.execute(
+                        """SELECT COUNT(*) FROM runs WHERE fingerprint=? AND status='running'
+                        AND owner IS NOT NULL AND lease_until>?""",
+                        (workflow.fingerprint, now),
+                    ).fetchone()[0]
+                    if active >= policy["max_active"]:
+                        continue
+                query = """SELECT id FROM runs WHERE fingerprint=?
+                    AND status IN ('pending','paused','running')
+                    AND (owner IS NULL OR lease_until<=?)
+                    AND (status!='pending' OR ready_at<=?)"""
+                parameters: list[Any] = [workflow.fingerprint, now, now]
+                if excluded:
+                    query += f" AND id NOT IN ({','.join('?' for _ in excluded)})"
+                    parameters.extend(excluded)
+                row = self.db.execute(
+                    query + " ORDER BY created_at,id LIMIT 1", parameters
+                ).fetchone()
+                if row is not None:
+                    candidates.append(
+                        (policy["last_claimed"], workflow.fingerprint, workflow, row["id"])
+                    )
+            if not candidates:
+                return None
+            _, _, workflow, run_id = min(candidates, key=lambda item: (item[0], item[1]))
+            lease = self._claim_locked(run_id, workflow, ttl)
+            if lease is None:
+                return None
+            self.db.execute("UPDATE scheduler_clock SET tick=tick+1 WHERE id=1")
+            tick = self.db.execute("SELECT tick FROM scheduler_clock WHERE id=1").fetchone()[0]
+            self.db.execute(
+                "UPDATE queue_policies SET last_claimed=? WHERE fingerprint=?",
+                (tick, workflow.fingerprint),
+            )
+            return workflow, lease
 
     def _claim_locked(self, run_id: str, workflow: Workflow, ttl: float) -> Lease | None:
         run = self.run(run_id)

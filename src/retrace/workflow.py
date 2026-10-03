@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import json
 import math
+import random
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -31,6 +32,8 @@ class RetryPolicy:
     max_attempts: int = 3
     initial_delay: float = 0.25
     max_delay: float = 30.0
+    jitter: bool = False
+    non_retryable: tuple[type[Exception], ...] = ()
 
     def __post_init__(self) -> None:
         if type(self.max_attempts) is not int or self.max_attempts < 1:
@@ -40,10 +43,23 @@ class RetryPolicy:
                 raise ValueError("retry delays must be finite and nonnegative")
         if self.max_delay < self.initial_delay:
             raise ValueError("max_delay must be >= initial_delay")
+        if type(self.jitter) is not bool:
+            raise ValueError("jitter must be a boolean")
+        object.__setattr__(self, "non_retryable", tuple(self.non_retryable))
+        if any(
+            not isinstance(cls, type) or not issubclass(cls, Exception)
+            for cls in self.non_retryable
+        ):
+            raise ValueError("non_retryable must contain Exception subclasses")
 
     def delay(self, failures: int) -> float:
         # Bound the exponent before multiplying, even for extreme user budgets.
-        return min(self.max_delay, self.initial_delay * 2.0 ** min(max(0, failures - 1), 60))
+        ceiling = min(self.max_delay, self.initial_delay * 2.0 ** min(max(0, failures - 1), 60))
+        return ceiling * random.random() if self.jitter else ceiling
+
+    def can_retry(self, error: Exception, failures: int) -> bool:
+        """Classify a failed attempt without drawing or scheduling a delay."""
+        return failures < self.max_attempts and not isinstance(error, self.non_retryable)
 
 
 @dataclass(frozen=True)
@@ -122,6 +138,19 @@ class Workflow:
                     "max_attempts": t.retry.max_attempts,
                     "initial_delay": t.retry.initial_delay,
                     "max_delay": t.retry.max_delay,
+                    **({"jitter": True} if t.retry.jitter else {}),
+                    **(
+                        {
+                            "non_retryable": sorted(
+                                {
+                                    f"{cls.__module__}:{cls.__qualname__}"
+                                    for cls in t.retry.non_retryable
+                                }
+                            )
+                        }
+                        if t.retry.non_retryable
+                        else {}
+                    ),
                     **({"wait_for": t.wait_for} if t.wait_for is not None else {}),
                 }
                 for t in sorted(self.tasks, key=lambda task: task.name)

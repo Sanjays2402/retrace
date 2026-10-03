@@ -22,11 +22,16 @@ import {
   Clock3,
   Moon,
   Sun,
+  Palette,
+  Search,
+  BookOpen,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { snapshot, nextPhase } from "@/lib/recovery";
+import { snapshot, nextPhase, filterJournal } from "@/lib/recovery";
 import { SignalLab } from "@/app/signal-lab";
 const repo = "https://github.com/Sanjays2402/retrace";
+const siteBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const docsBase = `${siteBase}/docs`;
 const command =
   "python -m pip install git+https://github.com/Sanjays2402/retrace.git";
 const icons = [FileText, ShieldCheck, Database, ArrowUpRight];
@@ -41,6 +46,8 @@ const phaseLabels = [
   "Run completed",
 ];
 const phaseFocus = [0, 0, 0, 1, 2, 2, 2, 3];
+const accentChoices = ["green", "red", "yellow", "blue"] as const;
+type Accent = (typeof accentChoices)[number];
 export default function Home() {
   const [phase, setPhase] = useState(0),
     [selected, setSelected] = useState(0),
@@ -50,6 +57,8 @@ export default function Home() {
   const [showExport, setShowExport] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [accent, setAccent] = useState<Accent>("green");
+  const [journalQuery, setJournalQuery] = useState("");
   const run = snapshot(phase),
     task = run.tasks[selected];
   useEffect(() => {
@@ -67,7 +76,25 @@ export default function Home() {
           : "light";
     setTheme(preferred);
     document.documentElement.dataset.theme = preferred;
+    try {
+      const savedAccent = localStorage.getItem("retrace-accent");
+      if (accentChoices.some((choice) => choice === savedAccent)) {
+        setAccent(savedAccent as Accent);
+        document.documentElement.dataset.accent = savedAccent as Accent;
+      }
+    } catch {
+      // The palette still works for this visit when storage is unavailable.
+    }
   }, []);
+  function chooseAccent(next: Accent) {
+    setAccent(next);
+    document.documentElement.dataset.accent = next;
+    try {
+      localStorage.setItem("retrace-accent", next);
+    } catch {
+      // The selected palette remains active for this visit.
+    }
+  }
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
     setTheme(next);
@@ -188,13 +215,15 @@ export default function Home() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
-  const journal = run.events.filter(
-    (e) => !onlySelected || e.task === task.key,
+  const journal = filterJournal(
+    run.events,
+    onlySelected ? task.key : null,
+    journalQuery,
   );
   return (
     <main className="shell">
       <aside className="sidebar">
-        <a className="brand" href={repo}>
+        <a className="brand" href={`${siteBase}/`}>
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/mark.svg`}
             alt=""
@@ -210,14 +239,14 @@ export default function Home() {
         <a className="nav-item" href="#signals">
           <Clock3 size={17} /> Signals lab <ArrowRight size={14} />
         </a>
-        <a
-          className="nav-item"
-          href={`${repo}/blob/main/docs/getting-started.md`}
-        >
-          <FileText size={17} /> Quickstart <ArrowUpRight size={14} />
+        <a className="nav-item" href={`${docsBase}/`}>
+          <BookOpen size={17} /> Documentation <ArrowRight size={14} />
         </a>
-        <a className="nav-item" href={`${repo}/blob/main/docs/architecture.md`}>
-          <Database size={17} /> Architecture <ArrowUpRight size={14} />
+        <a className="nav-item" href={`${docsBase}/getting-started/`}>
+          <FileText size={17} /> Quickstart <ArrowRight size={14} />
+        </a>
+        <a className="nav-item" href={`${docsBase}/architecture/`}>
+          <Database size={17} /> Architecture <ArrowRight size={14} />
         </a>
         <div className="side-note">
           <span className="side-label">THE RECOVERY CONTRACT</span>
@@ -227,15 +256,15 @@ export default function Home() {
             The progress stays.
           </h2>
           <p>Committed steps are reused. Interrupted work runs again.</p>
-          <a href={`${repo}/blob/main/docs/recovery.md`}>
-            Read the guarantees <ArrowUpRight size={14} />
+          <a href={`${docsBase}/recovery/`}>
+            Read the guarantees <ArrowRight size={14} />
           </a>
         </div>
         <div className="side-footer">LOCAL-FIRST · OPEN SOURCE</div>
       </aside>
       <div className="content">
         <header className="topbar">
-          <a className="mobile-brand" href={repo} aria-label="Retrace on GitHub">
+          <a className="mobile-brand" href={`${siteBase}/`} aria-label="Retrace home">
             <img
               src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/mark.svg`}
               alt=""
@@ -249,6 +278,20 @@ export default function Home() {
             <strong>Recovery lab</strong>
           </div>
           <div className="topbar-actions">
+            <div className="palette-control" role="group" aria-label="Accent color">
+              <Palette size={15} aria-hidden="true" />
+              {accentChoices.map((choice) => (
+                <button
+                  key={choice}
+                  className={`palette-swatch ${choice}`}
+                  type="button"
+                  aria-label={`${choice[0].toUpperCase()}${choice.slice(1)} theme`}
+                  aria-pressed={accent === choice}
+                  title={`${choice[0].toUpperCase()}${choice.slice(1)} theme`}
+                  onClick={() => chooseAccent(choice)}
+                />
+              ))}
+            </div>
             <button
               className="theme-toggle"
               type="button"
@@ -582,6 +625,16 @@ export default function Home() {
                   {onlySelected ? "Selected step" : "All steps"}
                 </button>
               </div>
+              <label className="journal-search">
+                <Search size={15} aria-hidden="true" />
+                <span className="sr-only">Search events</span>
+                <input
+                  type="search"
+                  value={journalQuery}
+                  onChange={(event) => setJournalQuery(event.target.value)}
+                  placeholder="Search events"
+                />
+              </label>
               <div className="journal-list">
                 {journal.length ? (
                   journal
@@ -600,7 +653,11 @@ export default function Home() {
                       </div>
                     ))
                 ) : (
-                  <p className="empty">No events for this step yet.</p>
+                  <p className="empty">
+                    {journalQuery.trim()
+                      ? "No events match your search."
+                      : "No events for this step yet."}
+                  </p>
                 )}
               </div>
               <p className="journal-foot">
@@ -626,8 +683,8 @@ export default function Home() {
                 cannot commit after takeover.
               </p>
             </div>
-            <a href={`${repo}/blob/main/docs/architecture.md`}>
-              Read the protocol <ArrowUpRight size={15} />
+            <a href={`${docsBase}/architecture/`}>
+              Read the protocol <ArrowRight size={15} />
             </a>
           </div>
           <div className="ownership-map">
@@ -684,8 +741,8 @@ export default function Home() {
               to your terminal.
             </h2>
             <p>Python 3.11+ · One SQLite file · Zero runtime dependencies</p>
-            <a href={`${repo}/blob/main/docs/getting-started.md`}>
-              Five-minute recovery walkthrough <ArrowUpRight size={16} />
+            <a href={`${docsBase}/getting-started/`}>
+              Five-minute recovery walkthrough <ArrowRight size={16} />
             </a>
           </div>
           <div className="terminal">

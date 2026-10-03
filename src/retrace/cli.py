@@ -14,7 +14,16 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from retrace import DefinitionMismatch, Engine, LeaseLost, RunBusy, Store, Workflow, __version__
+from retrace import (
+    DefinitionMismatch,
+    Engine,
+    LeaseLost,
+    QueueFull,
+    RunBusy,
+    Store,
+    Workflow,
+    __version__,
+)
 
 
 def load_workflow(spec: str) -> Workflow:
@@ -54,10 +63,16 @@ def parser() -> argparse.ArgumentParser:
         help="wait this many seconds before a worker claims the run",
     )
     worker = commands.add_parser("worker", help="claim and execute queued runs on this machine")
-    worker.add_argument("workflow")
+    worker.add_argument("workflow", nargs="+", help="one or more MODULE:ATTRIBUTE definitions")
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
     worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
     worker.add_argument("--once", action="store_true", help="drain available runs and exit")
+    queue = commands.add_parser("queue", help="show queue depth, wait age, and policies")
+    queue.add_argument(
+        "--configure", metavar="WORKFLOW", help="persist limits for MODULE:ATTRIBUTE"
+    )
+    queue.add_argument("--max-active", type=int, help="max live runs across all local workers")
+    queue.add_argument("--max-queued", type=int, help="max pending or paused runs")
     worker.add_argument(
         "--drain-timeout",
         type=float,
@@ -90,6 +105,9 @@ def parser() -> argparse.ArgumentParser:
     )
     runs = commands.add_parser("runs", help="list recent runs as JSON")
     runs.add_argument("--limit", type=int, default=100, help="maximum runs to list (default: 100)")
+    runs.add_argument("--status", action="append", help="run status; repeat to match several")
+    runs.add_argument("--workflow", help="exact workflow name, across versions")
+    runs.add_argument("--before", metavar="RUN_ID", help="list runs older than this run")
     inspect = commands.add_parser("inspect", help="show run checkpoints and attempts as JSON")
     inspect.add_argument("run_id")
     events = commands.add_parser(
@@ -99,6 +117,20 @@ def parser() -> argparse.ArgumentParser:
     events.add_argument("--after", type=int, default=0, help="exclusive event cursor")
     trace = commands.add_parser("trace", help="export Chrome Trace JSON for Perfetto")
     trace.add_argument("run_id")
+    backup = commands.add_parser("backup", help="save a checked standalone database snapshot")
+    backup.add_argument("destination", help="new backup file; existing paths are never overwritten")
+    backup.add_argument(
+        "--timeout", type=float, default=30, help="copy timeout in seconds (default: 30)"
+    )
+    prune = commands.add_parser("prune", help="preview cleanup of old terminal unkeyed runs")
+    prune.add_argument(
+        "--older-than", type=float, required=True, metavar="DAYS", help="age in days"
+    )
+    prune.add_argument("--limit", type=int, default=100, help="max runs per batch (1–500)")
+    prune.add_argument("--include-failed", action="store_true", help="also remove old failed runs")
+    prune.add_argument(
+        "--apply", action="store_true", help="delete eligible runs; default is preview"
+    )
     serve = commands.add_parser("serve", help="open a read-only local dashboard")
     serve.add_argument("--port", type=int, default=7760)
     return root
@@ -112,12 +144,25 @@ def main(argv: list[str] | None = None) -> int:
 
             serve(args.db, args.port)
             return 0
-        readonly = args.command in ("runs", "inspect", "events", "trace") or (
-            args.command == "retry" and args.dry_run
+        readonly = (
+            args.command in ("runs", "inspect", "events", "trace", "backup")
+            or (args.command == "queue" and args.configure is None)
+            or (args.command == "retry" and args.dry_run)
+            or (args.command == "prune" and not args.apply)
         )
         with Store(args.db, readonly=readonly) as store:
             if args.command == "runs":
-                print(json.dumps(store.runs(limit=args.limit), indent=2))
+                print(
+                    json.dumps(
+                        store.runs(
+                            limit=args.limit,
+                            statuses=args.status,
+                            workflow=args.workflow,
+                            before=args.before,
+                        ),
+                        indent=2,
+                    )
+                )
             elif args.command == "inspect":
                 print(
                     json.dumps(
@@ -134,6 +179,19 @@ def main(argv: list[str] | None = None) -> int:
                 from retrace.trace import export_trace
 
                 print(json.dumps(export_trace(store, args.run_id), allow_nan=False))
+            elif args.command == "backup":
+                print(
+                    json.dumps(
+                        asdict(store.backup(args.destination, timeout=args.timeout)), indent=2
+                    )
+                )
+            elif args.command == "prune":
+                if not math.isfinite(args.older_than) or args.older_than <= 0:
+                    raise ValueError("--older-than must be a finite positive number of days")
+                before = max(0, time.time() - args.older_than * 86400)
+                operation = store.prune if args.apply else store.prune_plan
+                plan = operation(before, limit=args.limit, include_failed=args.include_failed)
+                print(json.dumps({"applied": args.apply, **asdict(plan)}, indent=2))
             elif args.command == "events":
                 store.run(args.run_id)
                 cursor = args.after
@@ -141,6 +199,31 @@ def main(argv: list[str] | None = None) -> int:
                     for event in page:
                         print(json.dumps(event))
                     cursor = page[-1]["id"]
+            elif args.command == "queue":
+                if args.configure is not None:
+                    if args.max_active is None and args.max_queued is None:
+                        raise ValueError("--configure requires --max-active or --max-queued")
+                    workflow = load_workflow(args.configure)
+                    existing = next(
+                        (
+                            item
+                            for item in store.queue_stats()
+                            if item["fingerprint"] == workflow.fingerprint
+                        ),
+                        None,
+                    )
+                    store.configure_queue(
+                        workflow,
+                        max_active=args.max_active
+                        if args.max_active is not None
+                        else (existing["max_active"] if existing else None),
+                        max_queued=args.max_queued
+                        if args.max_queued is not None
+                        else (existing["max_queued"] if existing else None),
+                    )
+                elif args.max_active is not None or args.max_queued is not None:
+                    raise ValueError("queue limits require --configure WORKFLOW")
+                print(json.dumps(store.queue_stats(), indent=2))
             elif args.command == "submit":
                 workflow = load_workflow(args.workflow)
                 if not math.isfinite(args.delay) or args.delay < 0:
@@ -168,12 +251,12 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "worker":
                 from retrace.worker import Worker
 
-                workflow = load_workflow(args.workflow)
+                workflows = tuple(load_workflow(spec) for spec in args.workflow)
                 if not math.isfinite(args.drain_timeout) or args.drain_timeout < 0:
                     raise ValueError("drain timeout must be finite and nonnegative")
                 dispatcher = Worker(
                     store,
-                    workflow,
+                    workflows,
                     max_runs=args.max_runs,
                     concurrency=args.concurrency,
                     lease_ttl=args.lease_ttl,
@@ -257,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         DefinitionMismatch,
         RunBusy,
         LeaseLost,
+        QueueFull,
     ) as exc:
         print(f"retrace: {exc}", file=sys.stderr)
         return 2

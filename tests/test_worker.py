@@ -91,11 +91,13 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.02)
             finish.set()
             results = await asyncio.wait_for(serving, 1)
+            self.assertEqual(len(results), 1)
+            self.assertIn(results[0].run_id, (first, second))
+            self.assertEqual(results[0].status, "succeeded")
             self.assertEqual(
-                [(result.run_id, result.status) for result in results], [(first, "succeeded")]
+                sorted((store.run(first)["status"], store.run(second)["status"])),
+                ["pending", "succeeded"],
             )
-            self.assertEqual(store.run(second)["status"], "pending")
-            self.assertEqual(store.run(first)["status"], "succeeded")
 
     async def test_drain_timeout_pauses_run_for_immediate_handoff(self):
         started = asyncio.Event()

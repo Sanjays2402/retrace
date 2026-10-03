@@ -15,12 +15,37 @@ process restart.
 
 **Early alpha.** The failure semantics are explicit and tested; the API may change before 1.0.
 
-![The Retrace inspector showing a real document-indexing run, its dependency graph, a retried embedding step, and committed output](docs/assets/inspector.png)
-
 **Try it now:** [Interactive recovery demo](https://sanjays2402.github.io/retrace/) — no install or account.
 
-**New here?** [Five-minute recovery walkthrough](docs/getting-started.md) ·
-[Real CSV and HTTP examples](docs/examples.md) · [Is Retrace a fit?](docs/choosing-retrace.md)
+**New here?** [Five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/) ·
+[Real CSV and HTTP examples](https://sanjays2402.github.io/retrace/docs/examples/) ·
+[Is Retrace a fit?](https://sanjays2402.github.io/retrace/docs/choosing-retrace/)
+
+### Pick your view
+
+The [interactive recovery playground](https://sanjays2402.github.io/retrace/) has four accent colors and light and dark modes. Select a preview to see it at full size.
+
+| Green · dark | Red · light |
+| :---: | :---: |
+| [![Retrace recovery playground in shining green dark mode](docs/assets/theme-green.png)](docs/assets/theme-green.png) | [![Retrace recovery playground in red light mode](docs/assets/theme-red.png)](docs/assets/theme-red.png) |
+| Yellow · light | Blue · dark |
+| [![Retrace recovery playground in yellow light mode](docs/assets/theme-yellow.png)](docs/assets/theme-yellow.png) | [![Retrace recovery playground in blue dark mode](docs/assets/theme-blue.png)](docs/assets/theme-blue.png) |
+
+The browser playground simulates a worker crash and recovery; it runs no real jobs. After installation, `retrace serve` opens the local inspector for real SQLite checkpoints and events.
+
+### See the workflow
+
+In the [recovery lab](https://sanjays2402.github.io/retrace/#lab), the worker stops after two checkpoints. A new worker reuses them, reruns the interrupted step, and commits the remaining work.
+
+| Worker interrupted · green | Run recovered · blue |
+| :---: | :---: |
+| [![Workflow interrupted with two committed checkpoints and no output from the interrupted step](docs/assets/feature-interrupted.png)](docs/assets/feature-interrupted.png) | [![Workflow succeeded after a second worker reused two checkpoints and committed all four steps](docs/assets/feature-recovered.png)](docs/assets/feature-recovered.png) |
+
+The [signals lab](https://sanjays2402.github.io/retrace/#signals) shows an approval gate waiting without holding a worker or spending an attempt budget.
+
+[![Signal-gated release workflow waiting for approval, with no worker held](docs/assets/feature-signal-wait.png)](docs/assets/feature-signal-wait.png)
+
+These screenshots show browser simulations. The Python engine and local inspector persist actual runs to SQLite.
 
 ## Try it in a minute
 
@@ -104,6 +129,25 @@ runs per process; global `--concurrency` limits ready tasks **within each run**.
 single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
 pass `ctx.idempotency_key` to systems that support deduplication.
 
+For mixed workloads, give a worker multiple definitions. Claims alternate between eligible
+definitions using a durable round-robin cursor, then take the oldest run within each one.
+Queue limits are persisted in SQLite and apply across local workers and producers:
+
+```bash
+retrace --db jobs.db queue --configure examples.pipeline:workflow \
+  --max-active 2 --max-queued 100
+retrace --db jobs.db worker examples.pipeline:workflow examples.approval:workflow --max-runs 4
+retrace --db jobs.db queue
+```
+
+`--max-active` bounds live leases for that exact workflow definition, so a busy pipeline
+cannot fill all slots in a shared worker. `--max-queued` rejects new submissions when the
+pending/paused queue is full; retrying an existing submission key still returns its original
+run. The queue snapshot reports ready, delayed, paused, waiting, active, and recoverable runs,
+plus the age of the oldest eligible run. Policies are per fingerprint; changing the workflow
+definition requires configuring the new fingerprint. The limit applies to worker claims;
+explicit `resume` remains an operator override.
+
 For rolling worker restarts, send **SIGTERM** to a worker process. It stops claiming new runs,
 lets its current runs finish for up to 30 seconds, then pauses any still active work and
 releases its leases. Another worker can claim those paused runs immediately, without waiting
@@ -139,6 +183,34 @@ committed; eligible blocked descendants are reopened. Shared downstream steps re
 while any dependency is still failed. Attempt numbers, idempotency keys, and history are preserved.
 See [the recovery guide](docs/recovery.md) for a runnable example and the exact failure-budget rules.
 
+## Back up a live database
+
+```bash
+mkdir backups
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db backups/before-cleanup.db runs
+```
+
+Backups include committed WAL data, checkpoints, signals, submission keys, and event history.
+Retrace checks the copy and publishes one standalone database file without overwriting an
+existing destination. Use the backup as a separate database path to inspect or recover runs.
+See [backup and restore](https://sanjays2402.github.io/retrace/docs/api/#back-up-and-restore-a-database)
+for active-lease handling and the external side-effect replay window.
+
+## Clean up old history
+
+```bash
+retrace --db jobs.db prune --older-than 30             # preview only
+retrace --db jobs.db prune --older-than 30 --apply      # remove the selected batch
+```
+
+Cleanup removes old succeeded and cancelled runs with their checkpoints, attempts, signals,
+and events in one transaction. It protects unfinished work and runs with submission keys.
+Failed runs require `--include-failed`. Each batch defaults to 100 runs; retained event IDs
+stay unchanged. Save a backup or exported traces if you need the removed history.
+See [the retention guide](https://sanjays2402.github.io/retrace/docs/api/#retain-useful-runs-and-clean-up-old-history)
+for the Python API, batching rules, and deduplication guarantees.
+
 ## A workflow is ordinary Python
 
 ```python
@@ -169,6 +241,9 @@ workflow = Workflow(
 retrace run pipeline:workflow --input '{"values": [3, 7, 11]}'
 retrace runs                    # latest 100 runs, newest first
 retrace runs --limit 5          # restrict the listing
+retrace runs --status failed --status waiting # find runs needing attention
+retrace runs --workflow ingestion --limit 25 # filter by workflow name
+retrace runs --before <LAST_RUN_ID> # page through older history
 retrace events <RUN_ID> > events.jsonl
 ```
 
@@ -202,10 +277,13 @@ asyncio.run(main())
 | Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
 | Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
 | Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
-| Durable retries | Exponential backoff with a cap; failure counts and retry deadlines survive restarts |
+| Durable retries | Capped exponential backoff, optional full jitter, and permanent-error classification; retry deadlines survive restarts |
 | Durable signals | One-shot JSON messages can arrive before or after a task waits; waiting runs release their worker lease |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
+| Run history search | Combine status and workflow filters, with stable pagination through older runs via Python, CLI, and inspector API |
+| Run retention | Preview and atomically remove old terminal runs; unfinished work and submission keys stay protected |
+| Online backups | Checked standalone SQLite snapshots including committed WAL data, with no-overwrite publication |
 | Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
 | Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |
@@ -256,10 +334,9 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **74 tests**, process-level producer and worker contention, 25
+The Python suite includes process-level producer and worker contention, 25
 reproducible generated DAGs, transactional rollback injection, stale-worker fencing, persistent
-retry deadlines, HTTP security checks, and a real process-kill/restart test. Local Python 3.12
-verification reports **96% combined statement/branch coverage** and **100% for the scheduler**.
+retry deadlines, retention rollback and cursor checks, HTTP security checks, and a real process-kill/restart test.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
 Fourteen Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.

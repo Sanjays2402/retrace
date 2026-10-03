@@ -35,12 +35,21 @@ flowchart LR
    pool will poll and reclaim the run after lease expiry; without one, call `resume` explicitly.
 
 `retrace submit` persists a pending run, while `retrace worker` starts a polling process for one
-workflow definition. Each process may own multiple runs, bounded by `--max-runs`; the task
+or more workflow definitions. Each process may own multiple runs, bounded by `--max-runs`; the task
 concurrency limit applies separately inside each run. `--once` drains runs available to that
 worker and exits. It does not wait for another process's live lease to expire. The queue is a
 local SQLite table, not a network broker. Each worker uses its own SQLite connection on the
 same machine and local disk. Worker processes require access to the same workflow code; a
 fingerprint mismatch leaves the run untouched.
+
+For shared pools, `Store.claim_next_any` inspects the oldest eligible run of each loaded
+definition inside one `BEGIN IMMEDIATE` transaction. It excludes definitions at their
+configured live-lease cap and chooses the least recently claimed definition using a durable
+monotonic sequence. The same transaction advances that sequence when assigning the lease.
+`Store.create` checks queue depth under the same write lock before admitting a run, so
+competing producers cannot exceed `max_queued`. Duplicate keyed submissions are resolved
+before admission. This is equal-share fairness among eligible definitions; a worker must
+load each definition it is expected to serve.
 
 On SIGTERM, the CLI worker enters a drain phase: it stops claiming runs, waits for owned
 runs to complete up to `--drain-timeout`, then cancels active coroutines. The engine releases
@@ -141,8 +150,46 @@ requires no additional schema change. See [the recovery guide](recovery.md).
 may fail twice and succeed on its third attempt. Interrupted attempts are separately recorded
 and do not consume the failure budget; repeated crashes may therefore create more than three
 attempt records. Manual retry opens a fresh failure budget, so lifetime failures can also exceed
-`max_attempts`; the attempt journal retains that history. Backoff is deterministic, capped, and persisted as an absolute retry deadline.
-Jitter and exception-specific retry filters are future work.
+`max_attempts`; the attempt journal retains that history. Backoff is capped and persisted as
+an absolute retry deadline. It is deterministic by default; optional full jitter samples
+uniformly from zero to the cap for that failure count. Sampling happens before the atomic
+failure checkpoint, never while resuming an existing deadline. A crash before that commit
+leaves an interrupted attempt; a crash after it preserves the selected deadline.
+
+Exception classes in `RetryPolicy.non_retryable` bypass automatic retry, including their
+subclasses. The attempt still increments the failure count and journals the error. A terminal
+failure blocks descendants while independent branches continue. Both classification and
+jitter settings are fingerprinted; omitted defaults keep preexisting definitions compatible.
+
+## Whole-run retention
+
+Cleanup selects old, terminal, unkeyed runs under `BEGIN IMMEDIATE`. It deletes events,
+signals, attempts, tasks, and the run in foreign-key order inside the same transaction.
+Any failure rolls back the entire batch. Concurrent cleanup operators therefore cannot
+delete the same run twice, and a failed run reopened by manual retry before selection is
+protected by its new pending state. The read-only preview uses a consistent read transaction;
+apply selects again rather than trusting the preview.
+
+The journal is append-only while a run is retained. Cleanup removes a whole run's journal,
+never individual events from a retained run. It preserves SQLite's event sequence so remaining
+cursors keep their meaning and future IDs do not rewind. Submission-key runs are protected
+because their run rows also serve as durable deduplication records. See the
+[cleanup API and CLI](api.md#retain-useful-runs-and-clean-up-old-history) for age and batching rules.
+
+## Online snapshots
+
+`Store.backup` copies SQLite's committed state through the online backup API using a
+separate destination connection. A read-only source can observe committed WAL frames;
+independent producers can continue writing. The resulting copy is consolidated into
+rollback-journal mode and checked for database integrity and foreign-key violations.
+It is closed and synced before a hard link publishes the complete file at a new path.
+The link fails if another process already created that destination. Temporary files are
+removed on failure and after publication. The source connection must not be in a transaction.
+
+Lease ownership and absolute retry deadlines are copied as stored, not reset. Restore
+therefore keeps the same fencing and recovery rules within the restored database. It does
+not fence workers still using the original database or undo external effects after the
+snapshot. See [backup and restore](api.md#back-up-and-restore-a-database).
 
 ## Commit boundary and side effects
 
@@ -208,9 +255,10 @@ and exposes no mutation endpoints. It has no authentication and is not an intern
 
 `runs` stores definition, input, lease, and overall state; `tasks` stores the latest checkpoint;
 `attempts` preserves execution history; `events` is the ordered audit log; `signals` stores
-one payload per run and signal name. Foreign keys are enabled.
-`PRAGMA user_version=3` marks the schema; unknown future versions are refused. Opening an older
-database for writing applies the submission and signal migrations in transactions,
+one payload per run and signal name. `queue_policies` stores per-definition limits and the
+fairness cursor; `scheduler_clock` stores its monotonic sequence. Foreign keys are enabled.
+`PRAGMA user_version=4` marks the schema; unknown future versions are refused. Opening an older
+database for writing applies the submission, signal, and queue migrations in transactions,
 preserving existing runs and checkpoints. Read-only connections do not migrate. Back up
 databases before upgrading alpha versions; a general migration framework is still future work.
 

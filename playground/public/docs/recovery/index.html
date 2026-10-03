@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Understand retries, preserved outputs, and external effects.">
+  <title>Recovery contract · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link current" href="../recovery/" aria-current="page">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Recovery contract</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link current" href="../recovery/" aria-current="page">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> UNDER THE HOOD</span><h1>Recovery contract</h1><p>Understand retries, preserved outputs, and external effects.</p></div><article class="markdown-body"><p><code>resume</code> recovers interrupted execution. <code>retry</code> explicitly reopens failed steps after the
+underlying cause is fixed. Both reuse committed successful outputs, but only retry resets the
+failure budget. Retrying does not allow a different workflow definition or changed input.</p>
+<h2 id="a-complete-local-example">A complete local example</h2>
+<p>The included <code>examples.recoverable</code> workflow extracts 128 records, then simulates an unavailable
+service. A local readiness file acts as the switch; no real external service is contacted.</p>
+<pre><code class="language-bash">retrace run examples.recoverable:workflow --input '{&quot;ready_file&quot;:&quot;service.ready&quot;}'
+# Save the printed RUN_ID. The run fails after two publish attempts.
+python -c &quot;from pathlib import Path; Path('service.ready').touch()&quot;
+retrace retry examples.recoverable:workflow &lt;RUN_ID&gt; --dry-run
+retrace retry examples.recoverable:workflow &lt;RUN_ID&gt;
+retrace inspect &lt;RUN_ID&gt;
+</code></pre>
+<p>The plan lists <code>publish</code> under <code>reset</code> and <code>extract</code> under <code>preserved</code>. After recovery, extraction
+still has one attempt. Publishing has three attempts: the two original failures and the final
+success. Its idempotency key is unchanged. Existing errors remain in the attempt journal even
+though the latest checkpoint has succeeded.</p>
+<h2 id="branch-selection">Branch selection</h2>
+<p>Repeat <code>--task</code> to choose multiple currently failed steps; omit it to retry all failures.
+Consider a graph where <code>left</code> and <code>right</code> both failed and a <code>join</code> depends on both:</p>
+<pre><code class="language-mermaid">flowchart LR
+    root[Committed root] --&gt; left[Failed left]
+    root --&gt; right[Failed right]
+    left --&gt; join[Blocked join]
+    right --&gt; join
+    join --&gt; final[Blocked final]
+</code></pre>
+<p>Retrying only <code>left</code> reopens <code>left</code>. <code>join</code> and <code>final</code> remain blocked by <code>right</code>. The run still
+reports failure, but preserves the newly successful <code>left</code> checkpoint. A later retry of <code>right</code>
+can reopen <code>right</code>, <code>join</code>, and <code>final</code> without repeating <code>root</code> or <code>left</code>. Unknown, duplicate,
+empty, successful, and blocked selections are rejected. Select the failed cause, not its blocked
+symptom.</p>
+<h2 id="audit-and-budgets">Audit and budgets</h2>
+<ul>
+<li>Same run ID and workflow fingerprint; no source-code or input override.</li>
+<li>Successful task rows and outputs remain unchanged.</li>
+<li>Reset task rows clear latest error/output/timing/deadline and receive <code>failures=0</code>.</li>
+<li>Attempt numbers are monotonically increasing. Old attempts and events are never deleted.</li>
+<li>Each <code>task.reset</code> records previous status and budget count; <code>run.retry_requested</code> records the plan.</li>
+<li><code>RetryPolicy.max_attempts</code> applies to the new failure budget. Repeated manual retries may
+  accumulate more lifetime failures than that limit. Interrupted attempts do not consume it.</li>
+<li>All resets and their journal events commit atomically. A crash before commit leaves the old
+  failed run; a crash after commit leaves a pending run that can be resumed.</li>
+<li>A read-only plan is only a preview. Retry rechecks the current state, so concurrent commands
+  cannot apply the same failure reset twice. Another worker may claim the pending run; ownership
+  is still enforced by the normal lease protocol.</li>
+</ul>
+<p>Repair an external dependency and keep the original workflow implementation to reuse its
+checkpoints. If the function behavior, input, or dependency contract must change, create a new
+run with a new version instead.</p>
+<h2 id="external-side-effects">External side effects</h2>
+<p>A failed attempt may already have performed an external mutation. Retry keeps the stable
+<code>Context.idempotency_key</code>; use it with a downstream service that actually deduplicates requests.
+Database fencing and preserved checkpoints do not provide exactly-once external effects.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../architecture/"><small>← PREVIOUS</small><strong>Architecture</strong></a><a href="../api/"><small>NEXT →</small><strong>API and CLI</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/recovery.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#a-complete-local-example">A complete local example</a>
+<a class="toc-level-2" href="#branch-selection">Branch selection</a>
+<a class="toc-level-2" href="#audit-and-budgets">Audit and budgets</a>
+<a class="toc-level-2" href="#external-side-effects">External side effects</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

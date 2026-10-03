@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Find implemented work and contribution ideas.">
+  <title>Roadmap · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link current" href="../roadmap/" aria-current="page">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Roadmap</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link current" href="../roadmap/" aria-current="page">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> COMMUNITY</span><h1>Roadmap</h1><p>Find implemented work and contribution ideas.</p></div><article class="markdown-body"><p>This is a direction, not a delivery promise. Retrace focuses on inspectable local durability.</p>
+<h2 id="implemented-since-v01">Implemented since v0.1</h2>
+<ul>
+<li>
+<p>Filtered run history by status and workflow, with exclusive cursor pagination in Python,
+  CLI, and the local inspector API.</p>
+</li>
+<li>
+<p>Selective failed-branch retry with read-only preview, fresh failure budgets, and preserved history.</p>
+</li>
+<li>
+<p>Inspector journal filters, payload search/expansion, and filtered JSONL export without losing incoming events.</p>
+</li>
+<li>
+<p>Graph zoom, responsive fit-to-view, and reset controls with keyboard access.</p>
+</li>
+<li>Chrome Trace JSON export with task lanes and preserved attempt history.</li>
+<li>A local multi-process worker pool with atomic queue claims, bounded parallel runs, and
+  automatic recovery after a worker's lease expires.</li>
+<li>Idempotent submission keys and delayed run eligibility with a v1-to-v2 schema migration.</li>
+<li>Durable cancellation for queued and active runs, with lease revocation and preserved checkpoints.</li>
+<li>Bounded graceful worker drain for local rolling restarts and immediate paused-run handoff.</li>
+<li>Exception-based retry classification and optional full jitter, with persisted deadlines
+  reused across restarts and compatibility for default-policy workflows.</li>
+<li>Whole-run retention with read-only preview, bounded atomic deletion, and protection for
+  unfinished work, submission keys, and retained event cursors.</li>
+<li>Checked online database backups, no-overwrite publication, and restore from saved checkpoints.</li>
+</ul>
+<h2 id="small-well-scoped-contributions">Small, well-scoped contributions</h2>
+<ul>
+<li><strong>Retry examples.</strong> Demonstrate a deduplicated HTTP mutation against a small local test server.
+  Show the side-effect-before-checkpoint crash window explicitly.</li>
+</ul>
+<h2 id="design-proposals-welcome">Design proposals welcome</h2>
+<ul>
+<li><strong>Keyed-run expiration and compaction.</strong> Define a deduplication lifetime and partial-history
+  contract beyond whole-run cleanup, without breaking event cursors or recovery.</li>
+<li><strong>Storage evolution.</strong> Transactional schema migrations with backup/rollback guidance and
+  compatibility fixtures from prior releases.</li>
+<li><strong>Scheduler efficiency.</strong> Replace repeated full task snapshots with an incremental ready queue.
+  Benchmark before/after, preserve crash semantics, and keep storage as the recovery authority.</li>
+</ul>
+<h2 id="intentionally-outside-the-current-scope">Intentionally outside the current scope</h2>
+<p>Multi-host scheduling, a hosted control plane, arbitrary-code isolation, exactly-once external
+side effects, and replacing a full orchestration platform. These need different operational and
+security contracts and should not be implied by the current API.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../security/"><small>← PREVIOUS</small><strong>Security</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/roadmap.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#implemented-since-v01">Implemented since v0.1</a>
+<a class="toc-level-2" href="#small-well-scoped-contributions">Small, well-scoped contributions</a>
+<a class="toc-level-2" href="#design-proposals-welcome">Design proposals welcome</a>
+<a class="toc-level-2" href="#intentionally-outside-the-current-scope">Intentionally outside the current scope</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

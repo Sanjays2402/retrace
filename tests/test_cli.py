@@ -26,6 +26,45 @@ class CLITests(unittest.TestCase):
             code = main(["--db", self.db, *args])
         return code, out.getvalue(), err.getvalue()
 
+    def test_backup_uses_readonly_source_and_refuses_to_overwrite(self):
+        destination = str(Path(self.directory.name, "backup.db"))
+        self.assertEqual(self.invoke("backup", destination)[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        self.assertFalse(Path(destination).exists())
+        self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        code, out, err = self.invoke("backup", destination, "--timeout", "10")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["runs"], 1)
+        self.assertEqual(json.loads(out)["size_bytes"], Path(destination).stat().st_size)
+        before = Path(destination).read_bytes()
+        self.assertEqual(self.invoke("backup", destination)[0], 2)
+        self.assertEqual(Path(destination).read_bytes(), before)
+        self.assertEqual(self.invoke("backup", destination + ".new", "--timeout", "nan")[0], 2)
+        with Store(destination, readonly=True) as restored:
+            self.assertEqual(len(restored.runs()), 1)
+
+    def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
+        self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        with Store(self.db) as store:
+            run_id = store.runs()[0]["id"]
+            store.cancel(run_id)
+            store.db.execute("UPDATE runs SET updated_at=0 WHERE id=?", (run_id,))
+        code, out, err = self.invoke("prune", "--older-than", "30")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["run_ids"], [run_id])
+        self.assertFalse(json.loads(out)["applied"])
+        self.assertEqual(len(json.loads(self.invoke("runs")[1])), 1)
+        code, out, err = self.invoke("prune", "--older-than", "30", "--apply")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(json.loads(out)["applied"])
+        self.assertEqual(json.loads(out)["run_ids"], [run_id])
+        self.assertEqual(json.loads(self.invoke("runs")[1]), [])
+        for days in ("0", "-1", "nan", "inf"):
+            self.assertEqual(self.invoke("prune", "--older-than", days)[0], 2)
+        self.assertEqual(self.invoke("prune", "--older-than", "30", "--limit", "501")[0], 2)
+
     def test_run_inspect_resume_list_and_events(self):
         code, out, err = self.invoke(
             "run", "examples.pipeline:workflow", "--input", '{"values":[2,4]}'
@@ -58,6 +97,32 @@ class CLITests(unittest.TestCase):
         full = json.loads(self.invoke("runs")[1])
         self.assertEqual(len(full), 3)
         self.assertEqual(limited, full[:2])
+
+    def test_runs_filters_and_cursor(self):
+        for _ in range(3):
+            self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        all_runs = json.loads(self.invoke("runs")[1])
+        self.invoke("cancel", all_runs[1]["id"])
+        with Store(self.db, readonly=True) as store:
+            name = store.run(all_runs[0]["id"])["name"]
+        code, out, err = self.invoke("runs", "--status", "pending", "--workflow", name)
+        self.assertEqual(code, 0, err)
+        page = json.loads(out)
+        self.assertEqual([r["id"] for r in page], [all_runs[0]["id"], all_runs[2]["id"]])
+        page = json.loads(
+            self.invoke(
+                "runs",
+                "--before",
+                all_runs[0]["id"],
+                "--status",
+                "pending",
+                "--status",
+                "cancelled",
+            )[1]
+        )
+        self.assertEqual([r["id"] for r in page], [r["id"] for r in all_runs[1:]])
+        for args in (("--status", "typo"), ("--before", "missing"), ("--workflow", "")):
+            self.assertEqual(self.invoke("runs", *args)[0], 2)
 
     def test_submit_and_worker_once(self):
         code, out, err = self.invoke(

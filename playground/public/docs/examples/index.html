@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Work through CSV and HTTP delivery examples.">
+  <title>Real integrations · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link current" href="../examples/" aria-current="page">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Real integrations</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link" href="../getting-started/">Quickstart</a>
+<a class="doc-nav-link current" href="../examples/" aria-current="page">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> START HERE</span><h1>Real integrations</h1><p>Work through CSV and HTTP delivery examples.</p></div><article class="markdown-body"><p>Clone the repository and install it with <code>python -m pip install -e .</code> so the example
+modules are available. Run the following commands from the repository root.</p>
+<h2 id="csv-orders">CSV orders</h2>
+<pre><code class="language-sh">retrace run examples.csv_pipeline:workflow --input '{&quot;path&quot;:&quot;examples/data/orders.csv&quot;}'
+</code></pre>
+<p>On Windows PowerShell, put the JSON in a variable or use Python's API to avoid shell
+quoting differences. Expected summary: 3 orders, 5000 cents. Amounts use integers,
+not floating point. Duplicate IDs and negative amounts fail validation. File I/O runs
+in a thread so it does not block the scheduler's heartbeat.</p>
+<p>The extraction checkpoint stores the rows, so recovery uses the original snapshot even
+if the source file changes. This small example caps inputs at 1000 rows and the engine
+also enforces its 1 MiB JSON limit. For large data, checkpoint immutable artifact paths
+and checksums, and batch the work. Never overwrite an artifact referenced by a checkpoint.</p>
+<h2 id="http-delivery-with-an-ambiguous-response">HTTP delivery with an ambiguous response</h2>
+<pre><code class="language-sh">python -m examples.http_delivery
+</code></pre>
+<p>Expected output: <code>status=succeeded</code>, <code>http_requests=2</code>, <code>accepted_deliveries=1</code>,
+<code>attempts=2</code>. A real loopback HTTP server accepts the first request but returns 503.
+Retrace retries with the same <code>ctx.idempotency_key</code>; the receiver returns the existing
+receipt instead of accepting a second delivery. No external account or service is used.</p>
+<p>The receiver's in-memory map is only a teaching aid. A production receiver must atomically
+persist the key, request identity, effect, and receipt, reject key reuse with a different
+payload, and retain keys for the entire retry/recovery window. Retrace cannot provide
+exactly-once external effects by itself. Threaded blocking HTTP calls may continue after
+async cancellation; downstream idempotency remains necessary.</p>
+<h2 id="transient-errors-and-permanent-invalid-input">Transient errors and permanent invalid input</h2>
+<pre><code class="language-sh">retrace run examples.classified_retry:workflow --input '{&quot;count&quot;:128}'
+retrace run examples.classified_retry:workflow --input '{&quot;count&quot;:-1}'
+</code></pre>
+<p>The first command simulates a connection error, retries after a jittered delay, and succeeds
+on attempt two with 128 records. The second raises <code>ValueError</code> and fails after one attempt
+because invalid input is classified as permanent. No external service is called.
+Inspect either printed run ID with <code>retrace inspect RUN_ID</code> or <code>retrace serve</code> to compare
+its attempt history. See <a href="../api/#classify-failures-and-spread-retries">retry policy options</a>.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../getting-started/"><small>← PREVIOUS</small><strong>Quickstart</strong></a><a href="../choosing-retrace/"><small>NEXT →</small><strong>Is Retrace a fit?</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/examples.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#csv-orders">CSV orders</a>
+<a class="toc-level-2" href="#http-delivery-with-an-ambiguous-response">HTTP delivery with an ambiguous response</a>
+<a class="toc-level-2" href="#transient-errors-and-permanent-invalid-input">Transient errors and permanent invalid input</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>

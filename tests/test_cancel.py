@@ -68,7 +68,9 @@ class CancelProcessTests(unittest.TestCase):
     def test_cancel_running_worker_in_another_process(self):
         with tempfile.TemporaryDirectory() as directory:
             db = str(Path(directory, "runs.db"))
-            command = [sys.executable, "-m", "retrace", "--db", db, "--lease-ttl", "0.6"]
+            # This test exercises cancellation, not lease expiry. Give CI workers
+            # ample time to start before ownership could expire under load.
+            command = [sys.executable, "-m", "retrace", "--db", db, "--lease-ttl", "30"]
             submitted = subprocess.run(
                 command
                 + [
@@ -93,7 +95,10 @@ class CancelProcessTests(unittest.TestCase):
                 deadline = time.monotonic() + 20
                 while not Path(directory, "started").exists():
                     if worker.poll() is not None or time.monotonic() >= deadline:
-                        self.fail(f"worker did not start slow task: {worker.poll()}")
+                        if worker.poll() is None:
+                            worker.kill()
+                        _out, err = worker.communicate(timeout=5)
+                        self.fail(f"worker did not start slow task: {worker.returncode}: {err}")
                     time.sleep(0.02)
                 cancelled = subprocess.run(
                     command + ["cancel", run_id], capture_output=True, text=True, timeout=20

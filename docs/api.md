@@ -51,6 +51,35 @@ failures and timeouts, are retryable under the configured budget. Cancellation i
 not treated as a failure. Return JSON-compatible, small values. Task exceptions are persisted
 as a type/message string capped at 4,000 characters; tracebacks are not persisted.
 
+### Classify failures and spread retries
+
+```python
+policy = RetryPolicy(
+    max_attempts=5,
+    initial_delay=0.5,
+    max_delay=15,
+    jitter=True,
+    non_retryable=(ValueError, PermissionError),
+)
+```
+
+`non_retryable` is a tuple of exception **classes**, matched with `isinstance`, including
+subclasses. A matching error records one failed attempt and immediately fails the task;
+its descendants are blocked while independent branches can finish. Other `Exception`
+subclasses keep the configured failure budget. `TimeoutError` can also be excluded.
+Cancellation continues to propagate without consuming that budget.
+
+With `jitter=True`, each retry delay is sampled uniformly from zero up to the capped
+exponential delay. Retrace samples only when scheduling a retry, then commits the absolute
+deadline with the failed attempt and journal event. Reopening or resuming the run reuses
+that deadline. The default `jitter=False` retains deterministic backoff.
+
+Both options belong to the workflow fingerprint. Existing definitions with the defaults
+retain their original fingerprint; enabling either option changes it. Keep the original
+policy available to resume existing runs. Explicit manual retry can reopen a permanent
+failure after its external cause has been corrected; it uses the same classification on
+subsequent attempts.
+
 ## Run and resume
 
 ```python
@@ -127,6 +156,17 @@ must use separate `Store` connections to the same local SQLite file. `Store.clai
 the queue selection and fenced lease assignment one transaction. A crash can still repeat an
 external side effect before its checkpoint; use `Context.idempotency_key` downstream.
 
+Use `Worker(store, (workflow_a, workflow_b), max_runs=4)` for a shared pool. Each claim picks
+the least recently served eligible definition, then its oldest run. This round-robin state is
+persisted in SQLite and shared by competing local processes. A single-definition worker keeps
+its original FIFO behavior. Configure limits with
+`store.configure_queue(workflow, max_active=2, max_queued=100)` or the CLI `queue --configure`
+command. `max_active` caps live leases across workers; `max_queued` bounds pending and paused
+runs at submission time. `Store.create` raises `QueueFull` when full, except that an identical
+submission key returns its existing ID. `Store.queue_stats()` reports counts and
+`oldest_ready_age_seconds`, or `None` when no run is eligible. A direct `Engine.resume` can
+still claim past the worker cap for manual recovery.
+
 Pass `stop_event=asyncio.Event()` and `drain_timeout=30` to `Worker.serve` to request a
 graceful stop. Once the event is set, the worker claims no more runs. It waits up to the
 timeout for owned runs to finish, then cancels remaining coroutines, marks their attempts
@@ -184,6 +224,144 @@ all dependencies are already successful or included in the recovery plan. The ru
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. [Read the full recovery contract](recovery.md).
 
+## Find runs and page through history
+
+Filter run summaries at the database level to find work that needs attention, including
+runs older than the default 100-entry listing:
+
+```bash
+retrace --db jobs.db runs --status failed --status waiting
+retrace --db jobs.db runs --workflow ingestion --status failed --limit 25
+retrace --db jobs.db runs --workflow ingestion --status failed --limit 25 --before <LAST_RUN_ID>
+```
+
+Repeated status filters match **any** listed status. The workflow filter matches the exact
+workflow name across all versions; combine it with status filters to match both. Valid statuses
+are `pending`, `running`, `paused`, `waiting`, `succeeded`, `failed`, and `cancelled`.
+An expired worker lease still has persisted status `running` until recovery; this query does
+not reclassify it as paused or interrupted.
+
+```python
+page = store.runs(limit=25, statuses=["failed", "waiting"], workflow="ingestion")
+if page:
+    older = store.runs(
+        limit=25,
+        statuses=["failed", "waiting"],
+        workflow="ingestion",
+        before=page[-1]["id"],
+    )
+```
+
+Results sort by creation time descending, then run ID descending to resolve timestamp ties.
+Use the last returned run's ID as the exclusive `before` cursor. Newer submissions do not
+shift later pages. The cursor run need not match your filters. It must still exist: pruning
+it makes the cursor invalid (`KeyError` in Python, exit code 2 in the CLI, HTTP 404).
+Run status can change between requests, so pagination is a live view, not a frozen snapshot.
+Stop when a page is empty. Limits retain the existing bounds of 1–1000 (default 100).
+Queries remain read-only and return the existing JSON array of summaries.
+
+## Back up and restore a database
+
+```bash
+mkdir backups
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db backups/before-cleanup.db runs
+```
+
+`backup DESTINATION` opens the source read-only and uses the
+[SQLite online backup API](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup).
+It includes committed WAL data while other connections may continue writing. The snapshot
+contains the schema, inputs, checkpoints, attempts, signals, submission keys, queue policies,
+and event sequences. It is a consistent database snapshot; it does not include separately
+stored files or external service state.
+
+The destination's parent directory must exist. Existing files, symlinks, and SQLite sidecars
+at the destination are rejected; source database and sidecar paths are also rejected. Retrace
+copies into a private temporary file, checks SQLite integrity and foreign keys, consolidates
+it into a standalone database, then publishes it without overwriting an existing path. Failed
+copies are removed. Publication requires a filesystem that supports hard links. On POSIX,
+the backup keeps the temporary file's owner-only permissions.
+
+`--timeout 30` sets a finite positive copy timeout in seconds, checked between page batches
+and lock retries. It does not limit the subsequent integrity checks or file publication. JSON output contains
+`path`, `size_bytes`, `schema_version`, and `runs`, all describing the completed snapshot.
+The source schema version is preserved; opening an older backup for writing applies the
+normal schema migrations.
+
+```python
+from retrace import Store
+
+with Store("jobs.db", readonly=True) as store:
+    result = store.backup("backups/before-cleanup.db", timeout=30)
+```
+
+`Store.backup(destination, *, timeout=30)` returns an immutable `BackupResult`. It also
+supports in-memory stores. Call it outside a transaction on the source connection.
+
+To restore, use the backup as a **separate database path**, inspect it first, and load the
+original workflow definition when resuming:
+
+```bash
+retrace --db backups/before-cleanup.db inspect RUN_ID
+retrace --db backups/before-cleanup.db resume my_pipeline:workflow RUN_ID
+```
+
+Stop the original workers before executing restored runs. Live leases in a snapshot must
+expire before takeover. Successful checkpoints are reused; external effects made after the
+snapshot may execute again. Retain downstream idempotency records and use the existing
+`ctx.idempotency_key` to handle that replay window. Stored backups contain the same private
+inputs and outputs as the original database.
+
+## Retain useful runs and clean up old history
+
+```bash
+# Preview completed unkeyed runs last updated more than 30 days ago.
+retrace --db jobs.db prune --older-than 30 --limit 100
+# Apply after reviewing the preview. The selection is checked again under a write lock.
+retrace --db jobs.db prune --older-than 30 --limit 100 --apply
+```
+
+Cleanup defaults to `succeeded` and `cancelled` runs. Add `--include-failed` only when you
+no longer need to retry old failures. Pending, paused, waiting, running, and owned runs
+are always protected. Runs with submission keys are also always protected, including
+their results, so repeating a key continues to return the original run and conflicting
+work stays rejected.
+
+`--older-than` is a finite positive age in **days**, measured from `updated_at` with a
+strict cutoff. The default batch is 100 runs; `--limit` accepts 1–500. Batches select the
+oldest updated runs first, then break ties by run ID. Repeat the command to process more
+batches. Each removed run loses its input, manifest, checkpoints, attempts, signals, and
+events together in one transaction. Removed runs cannot be inspected, resumed, or retried.
+Save a database backup or exported traces first if you need their history.
+
+Both modes print JSON containing `applied`, the cutoff timestamp, `run_ids`, record counts
+(`tasks`, `attempts`, `events`, `signals`), and `protected_keyed_runs`. The latter counts all
+otherwise age/status-eligible keyed runs, independently of the batch limit. A preview is a
+snapshot, not a reservation: another worker or operator can change eligibility before apply.
+Save the apply receipt if you need a record of cleanup.
+
+```python
+import time
+from retrace import Store
+
+cutoff = time.time() - 30 * 86400
+with Store("jobs.db", readonly=True) as store:
+    preview = store.prune_plan(cutoff, limit=100)
+with Store("jobs.db") as store:
+    receipt = store.prune(cutoff, limit=100)
+```
+
+`Store.prune_plan(before, *, limit=100, include_failed=False)` works on read-only
+connections and returns an immutable `PrunePlan`. `Store.prune` uses the same arguments,
+reselects in its write transaction, and returns counts for the records it actually removed.
+Cleanup requires schema v4; migrate an older database by opening it for writing before
+previewing. No new schema migration is required for cleanup.
+
+Retained event IDs are never renumbered, and new events remain monotonic. SQLite reuses
+freed pages internally; this operation does not shrink the database file or run `VACUUM`.
+Queue policies and the durable scheduling cursor remain intact. Keyed-run expiration and
+partial event compaction are outside this cleanup contract.
+
 ## CLI
 
 Global flags go **before** the subcommand:
@@ -201,13 +379,15 @@ retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect <RUN_ID>
 retrace --db jobs.db events <RUN_ID> --after 42
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db jobs.db prune --older-than 30
 retrace --db jobs.db serve --port 7760
 ```
 
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`runs`, `inspect`, `events`, and `retry --dry-run` open read-only connections and never create
+`runs`, `inspect`, `events`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
@@ -225,7 +405,9 @@ failures appear in each result and do not stop the worker process.
 
 The local server starts only if the database exists. It serves:
 
-- `GET /api/runs`: latest 100 run summaries.
+- `GET /api/runs`: latest 100 run summaries. Optional `limit`, repeated `status`,
+  exact `workflow`, and exclusive `before` run-ID parameters filter and page results,
+  e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 

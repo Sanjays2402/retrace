@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Install Retrace and recover your first workflow.">
+  <title>Quickstart · Retrace docs</title>
+  <link rel="icon" href="../../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../docs.css">
+  <script src="../../docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <a class="docs-brand" href="../../"><img src="../../mark.svg" width="35" height="35" alt="">retrace<span>α</span></a>
+      <p class="sidebar-kicker">DOCUMENTATION</p>
+      <nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link current" href="../getting-started/" aria-current="page">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> Local-first · Open source</div>
+    </aside>
+    <div class="docs-content">
+      <header class="docs-topbar">
+        <div class="crumbs"><a href="../../">Playground</a><span>/</span><a href="../">Docs</a><span>/</span><strong>Quickstart</strong></div>
+        <div class="top-actions"><button class="theme-button" type="button" aria-label="Toggle light and dark theme">◐ <span>Theme</span></button><a href="https://github.com/Sanjays2402/retrace">GitHub ↗</a></div>
+      </header>
+      <details class="mobile-doc-nav"><summary>Browse documentation</summary><nav><a class="doc-nav-link" href="../">Overview</a>
+<span class="doc-nav-label">Start here</span>
+<a class="doc-nav-link current" href="../getting-started/" aria-current="page">Quickstart</a>
+<a class="doc-nav-link" href="../examples/">Real integrations</a>
+<a class="doc-nav-link" href="../choosing-retrace/">Is Retrace a fit?</a>
+<span class="doc-nav-label">Under the hood</span>
+<a class="doc-nav-link" href="../architecture/">Architecture</a>
+<a class="doc-nav-link" href="../recovery/">Recovery contract</a>
+<span class="doc-nav-label">Reference</span>
+<a class="doc-nav-link" href="../api/">API and CLI</a>
+<a class="doc-nav-link" href="../benchmark/">Benchmarks</a>
+<a class="doc-nav-link" href="../security/">Security</a>
+<span class="doc-nav-label">Community</span>
+<a class="doc-nav-link" href="../roadmap/">Roadmap</a></nav></details>
+      <div class="docs-layout"><main id="main" class="docs-main"><div class="article-hero"><span class="docs-eyebrow"><i></i> START HERE</span><h1>Quickstart</h1><p>Install Retrace and recover your first workflow.</p></div><article class="markdown-body"><p>For Python developers with small local data pipelines. You need Python 3.11 or newer
+and a local disk. No containers, cloud accounts, or API keys are required.</p>
+<h2 id="1-install">1. Install</h2>
+<pre><code class="language-sh">python -m venv .venv
+</code></pre>
+<p>Activate with <code>source .venv/bin/activate</code> on macOS/Linux, or
+<code>.venv\Scripts\Activate.ps1</code> in Windows PowerShell. Then:</p>
+<pre><code class="language-sh">python -m pip install git+https://github.com/Sanjays2402/retrace.git
+retrace --version
+</code></pre>
+<p>This installs from GitHub. PyPI publication is pending; <code>pip install retrace-engine</code>
+is not the documented installation path yet. Releases also provide wheel downloads.</p>
+<h2 id="2-run-crash-recover">2. Run, crash, recover</h2>
+<pre><code class="language-sh">retrace --db first-run.db --lease-ttl 1.5 demo --crash
+</code></pre>
+<p>Exit code <strong>86 is expected</strong>: the demo deliberately stops during embedding.
+Copy the printed run ID. Wait two seconds for its lease to expire, then replace RUN_ID:</p>
+<pre><code class="language-sh">retrace --db first-run.db resume retrace.demo:workflow RUN_ID
+retrace --db first-run.db inspect RUN_ID
+retrace --db first-run.db serve
+</code></pre>
+<p>Open http://127.0.0.1:7760. The run should be succeeded, the report should contain
+512 simulated vectors, and the attempt timeline should retain interrupted work.
+Select <code>ingest</code>: it should still have one attempt. Completed tasks were reused.</p>
+<p>This demo simulates document indexing. To see an actual file/API integration, continue
+with <a href="../examples/">the examples</a>.</p>
+<h2 id="3-export-evidence">3. Export evidence</h2>
+<pre><code class="language-sh">retrace --db first-run.db events RUN_ID &gt; events.jsonl
+retrace --db first-run.db trace RUN_ID &gt; trace.json
+</code></pre>
+<p>The inspector also offers trace downloads and permalinks to individual steps.
+Keep the database: deleting it deletes the checkpoints.</p>
+<h2 id="if-you-get-stuck">If you get stuck</h2>
+<ul>
+<li><code>retrace</code> not found: activate the virtual environment, or use <code>python -m retrace</code>.</li>
+<li>Run busy: wait for the previous worker's lease; do not delete the database to recover.</li>
+<li>Definition mismatch: resume with the original workflow version. Changed implementations
+  should use a new version and run.</li>
+<li>Port busy: use <code>retrace --db first-run.db serve --port 7761</code>.</li>
+<li>Failed task: fix its external cause, then use <code>retry</code>; <code>resume</code> does not reset failures.</li>
+</ul>
+<p><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Report a problem</a> with your Python
+version, command, expected behavior, and a small workflow. Remove secrets from logs.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../examples/"><small>NEXT →</small><strong>Real integrations</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/getting-started.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#1-install">1. Install</a>
+<a class="toc-level-2" href="#2-run-crash-recover">2. Run, crash, recover</a>
+<a class="toc-level-2" href="#3-export-evidence">3. Export evidence</a>
+<a class="toc-level-2" href="#if-you-get-stuck">If you get stuck</a></aside></div>
+      <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>
+    </div>
+  </div>
+</body>
+</html>
