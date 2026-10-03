@@ -345,3 +345,71 @@ test("unknown run permalink can recover by selecting an existing run", async ({
   await expect(page.locator(".node")).toHaveCount(8);
   await expect(page.locator("#connection")).toContainText("Live");
 });
+
+test("browse older runs, filter them, and return to the latest page", async ({
+  page,
+}) => {
+  const requests = [];
+  await page.route("**/api/runs?limit=*", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    const limit = Number(
+      new URL(route.request().url()).searchParams.get("limit"),
+    );
+    requests.push(limit);
+    const sample = data.runs[0];
+    const runs = Array.from({ length: 102 }, (_, i) => ({
+      ...sample,
+      id: i === 0 ? sample.id : `history-${i}`,
+      name: i === 101 ? "older-approval" : sample.name,
+      status: i === 101 ? "waiting" : "succeeded",
+      created_at: sample.created_at - i,
+    }));
+    await route.fulfill({ json: { runs: runs.slice(0, limit) } });
+  });
+  await page.goto("/");
+  await expect(page.locator(".run-card")).toHaveCount(100);
+  await expect(page.locator(".node")).toHaveCount(8);
+  await page.getByRole("button", { name: "Show 100 more" }).click();
+  await expect(page.locator(".run-card")).toHaveCount(102);
+  await expect(page.locator("#load-runs")).toBeHidden();
+  await page.locator("#search").fill("older-approval");
+  await page.locator('[data-filter="attention"]').click();
+  await expect(page.locator(".run-card")).toHaveCount(1);
+  await page.locator("#refresh").click();
+  await expect(page.locator(".run-card")).toHaveCount(1);
+  await expect(page.locator("#history-summary")).toContainText(
+    "102 recent runs loaded",
+  );
+  await page.getByRole("button", { name: "Latest 100" }).click();
+  await expect(page.locator(".run-card")).toHaveCount(0);
+  await expect(page.locator("#reset-runs")).toBeHidden();
+  expect(requests).toContain(200);
+});
+
+test("expanded history is bounded at one thousand runs", async ({ page }) => {
+  await page.route("**/api/runs?limit=*", async (route) => {
+    const response = await route.fetch();
+    const sample = (await response.json()).runs[0];
+    const limit = Number(
+      new URL(route.request().url()).searchParams.get("limit"),
+    );
+    await route.fulfill({
+      json: {
+        runs: Array.from({ length: limit }, (_, i) => ({
+          ...sample,
+          id: i === 0 ? sample.id : `bounded-${i}`,
+        })),
+      },
+    });
+  });
+  await page.goto("/");
+  for (let count = 200; count <= 1000; count += 100) {
+    await page.getByRole("button", { name: "Show 100 more" }).click();
+    await expect(page.locator(".run-card")).toHaveCount(count);
+  }
+  await expect(page.locator("#load-runs")).toBeHidden();
+  await expect(page.locator("#history-summary")).toContainText(
+    "retrace runs --before",
+  );
+});

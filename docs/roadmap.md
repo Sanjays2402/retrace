@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Expand live inspector history beyond the initial 100 runs, with bounded loading and
+  filters across the loaded list.
+
 - Filtered run history by status and workflow, with exclusive cursor pagination in Python,
   CLI, and the local inspector API.
 

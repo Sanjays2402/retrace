@@ -14,6 +14,7 @@ const state = {
   graphWidth: 460,
   graphHeight: 268,
   runs: [],
+  runLimit: 100,
   selected: new URLSearchParams(location.hash.slice(1)).get("run"),
   task: new URLSearchParams(location.hash.slice(1)).get("task"),
   detail: null,
@@ -45,6 +46,13 @@ async function api(path) {
   return response.json();
 }
 function renderRuns() {
+  $("load-runs").hidden =
+    state.runs.length < state.runLimit || state.runLimit >= 1000;
+  $("reset-runs").hidden = state.runLimit === 100;
+  $("history-summary").textContent =
+    state.runLimit >= 1000 && state.runs.length >= 1000
+      ? "Latest 1,000 runs loaded. Use retrace runs --before for older history."
+      : `${state.runs.length} recent runs loaded · search and filters apply to this list`;
   const focusedRun = document.activeElement?.dataset.run;
   $("run-count").textContent = state.runs.length;
   $("stat-total").textContent = state.runs.length;
@@ -374,8 +382,10 @@ function clearEventFilters() {
 async function refresh() {
   if (state.busy) return;
   state.busy = true;
+  $("load-runs").disabled = true;
+  $("reset-runs").disabled = true;
   try {
-    state.runs = (await api("/api/runs")).runs;
+    state.runs = (await api(`/api/runs?limit=${state.runLimit}`)).runs;
     if (!state.selected && state.runs.length) state.selected = state.runs[0].id;
     renderRuns();
     if (state.selected) {
@@ -404,8 +414,18 @@ async function refresh() {
     $("connection").className = "connection offline";
   } finally {
     state.busy = false;
+    $("load-runs").disabled = false;
+    $("reset-runs").disabled = false;
   }
 }
+$("load-runs").addEventListener("click", () => {
+  state.runLimit = Math.min(1000, state.runLimit + 100);
+  refresh();
+});
+$("reset-runs").addEventListener("click", () => {
+  state.runLimit = 100;
+  refresh();
+});
 $("search").addEventListener("input", renderRuns);
 $("refresh").addEventListener("click", refresh);
 document.querySelectorAll("[data-filter]").forEach((button) =>

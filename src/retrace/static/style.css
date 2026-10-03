@@ -308,6 +308,31 @@ p {
   max-height: 610px;
   overflow: auto;
 }
+.history-controls {
+  padding: 12px 13px;
+  border-top: 1px solid var(--line);
+}
+.history-controls p {
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.history-controls div {
+  display: flex;
+  gap: 8px;
+}
+.history-controls button {
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--ink);
+}
+.history-controls button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
 .run-card {
   display: block;
   text-align: left;

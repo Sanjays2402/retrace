@@ -370,6 +370,10 @@ Export uses a consistent read-only snapshot and never imports workflow code.
 The local inspector now includes **Zoom in**, **Zoom out**, **Fit graph**, and
 **Reset zoom**. Fit follows viewport changes, and live polling preserves your zoom.
 
+Use **Show 100 more** to expand the live run list up to 1,000 runs. Search and Attention
+filters cover the loaded history; **Latest 100** resets the list while keeping your
+selected run open. For older history, use the CLI's `runs --before` cursor.
+
 Inspector URLs now preserve the selected run, step, and execution view. Use **Permalink**
 to copy a link, bookmark an investigation, or navigate with browser Back and Forward.
 Links refer to the database served by that inspector; localhost links require the same local server.

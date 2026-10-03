@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add live inspector history expansion in 100-run batches up to 1,000 runs, with a reset control.
+- Keep search, attention filters, and counts aligned with the loaded history; add browser tests
+  for filtering, refresh persistence, reset, and the bounded list.
+
 - Add database-level run history filters for status and exact workflow name in Python, CLI, and inspector API.
 - Add exclusive run-ID pagination with deterministic timestamp tie-breaking and stable pages under new submissions.
 - Preserve existing listing response formats and read-only access; validate filters and missing cursors.

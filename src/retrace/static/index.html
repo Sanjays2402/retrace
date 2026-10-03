@@ -52,7 +52,7 @@
       <section class="stats" aria-label="Run statistics">
         <div>
           <span>RECENT RUNS</span><strong id="stat-total">0</strong
-          ><small>Latest 100 executions</small>
+          ><small>Loaded execution history</small>
         </div>
         <div>
           <span>SUCCEEDED</span><strong id="stat-success">0</strong
@@ -86,6 +86,18 @@
             ><button data-filter="attention">Attention</button>
           </div>
           <div id="run-list" class="run-list"></div>
+          <div class="history-controls">
+            <p
+              id="history-summary"
+              class="muted"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <div>
+              <button id="load-runs" type="button">Show 100 more</button>
+              <button id="reset-runs" type="button" hidden>Latest 100</button>
+            </div>
+          </div>
         </aside>
         <div class="run-workspace panel">
           <div id="empty" class="empty">
