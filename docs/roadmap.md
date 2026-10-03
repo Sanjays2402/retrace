@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Workflow health analytics with selectable creation-time cohorts, recovery metrics,
+  latency percentiles, and expired-lease visibility in the local inspector.
+
 - Downloadable diagnostic reports with default payload omission, coherent run snapshots,
   and explicit recent-journal truncation metadata.
 

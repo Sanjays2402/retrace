@@ -726,6 +726,14 @@ export default function Home() {
               <Pause size={18} />
               <span><strong>Graceful worker drain</strong><small>Stop new claims and hand unfinished runs to another local worker without waiting for a lease to expire.</small></span>
             </div>
+            <div>
+              <Clock3 size={18} />
+              <span><strong>Workflow health analytics</strong><small>Use the local inspector to compare failure rates, p95 completion time, recovered jobs, and expired leases across real workflow definitions.</small></span>
+            </div>
+            <div>
+              <FileText size={18} />
+              <span><strong>Diagnostic reports</strong><small>Download a coherent checkpoint and retry history for an investigation, with application payloads omitted by default.</small></span>
+            </div>
           </div>
           <div className="ownership-foot">
             <LockKeyhole size={15} />

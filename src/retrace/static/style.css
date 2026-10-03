@@ -1067,3 +1067,73 @@ footer a {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.health-panel {
+  margin-bottom: 20px;
+}
+.health-panel .panel-heading {
+  padding: 16px 16px 12px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.health-panel h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.health-panel .panel-heading p {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+.health-panel label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.health-panel select {
+  margin-left: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+}
+#health-scope,
+.health-note {
+  padding: 0 16px;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.health-scroll {
+  overflow: auto;
+  max-height: 260px;
+}
+.health-panel table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+.health-panel th,
+.health-panel td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.health-panel th {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.health-panel td:first-child {
+  font-weight: 600;
+}
+.health-panel td small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.health-alert {
+  color: #9b382d;
+  font-weight: 600;
+}

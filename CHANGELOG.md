@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add workflow health analytics in Python, CLI, inspector API, and a live dashboard panel.
+- Report cohort failure rates, p50/p95 completion latency, failed/interrupted attempts,
+  recovered runs, and expired leases per workflow definition.
+- Bound run sampling, expose truncation, and document creation-time and retention semantics.
+
 - Add diagnostic report downloads to the inspector, a read-only `report` CLI, and Python export API.
 - Omit application payloads and exception messages by default, with explicit CLI/Python opt-in.
 - Export a coherent snapshot with complete attempt history and a bounded journal with truncation metadata.

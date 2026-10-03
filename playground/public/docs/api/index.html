@@ -291,6 +291,42 @@ it makes the cursor invalid (<code>KeyError</code> in Python, exit code 2 in the
 Run status can change between requests, so pagination is a live view, not a frozen snapshot.
 Stop when a page is empty. Limits retain the existing bounds of 1–1000 (default 100).
 Queries remain read-only and return the existing JSON array of summaries.</p>
+<h2 id="measure-workflow-health">Measure workflow health</h2>
+<p>The local inspector's <strong>Workflow health</strong> panel compares workflow definitions over 24 hours,
+7 days, or 30 days, updating every 10 seconds. This helps operators find failing workflows,
+slow completion, recurring failed attempts, and running jobs whose worker leases expired.
+Metrics are computed from the real SQLite database independently of the loaded run list.</p>
+<pre><code class="language-bash">retrace --db jobs.db health
+retrace --db jobs.db health --hours 168 &gt; weekly-health.json
+</code></pre>
+<pre><code class="language-python">from retrace.health import workflow_health
+
+with Store(&quot;jobs.db&quot;, readonly=True) as store:
+    metrics = workflow_health(store, since=unix_timestamp, limit=10000)
+</code></pre>
+<p>The period is a <strong>creation-time cohort</strong>: it includes runs created at or after <code>since</code>,
+and uses their current status and all retained attempt history. It does not count every
+completion that happened during the period. Each group has its own workflow name, version,
+and fingerprint, so different definitions are not silently mixed.</p>
+<ul>
+<li><code>failure_rate</code> is failed runs divided by succeeded plus failed runs. Cancelled, queued,
+  paused, waiting, and running runs do not enter the denominator. With no completed runs,
+  it is <code>null</code>, not an invented 0% success rate.</li>
+<li><code>p50_completion_seconds</code> and <code>p95_completion_seconds</code> use nearest-rank percentiles of
+  creation-to-final-update elapsed time for succeeded and failed runs. Queue delay, signal
+  waits, downtime, and manual retries are included; these are not task execution durations.</li>
+<li><code>failed_attempts</code> and <code>interrupted_attempts</code> count retained attempts with those statuses.
+  <code>recovered_runs</code> counts succeeded runs that have at least one failed attempt.</li>
+<li><code>expired_leases</code> counts currently running runs whose lease expired by <code>captured_at</code>.
+  It indicates recovery eligibility, not proof a worker process is dead.</li>
+</ul>
+<p>The latest 10,000 matching runs are sampled by default. <code>matched_runs</code>, <code>sampled_runs</code>,
+<code>limit</code>, and <code>truncated</code> make that scope explicit. Python limits must be integers from 1
+to 10,000; <code>since</code> must be a finite nonnegative Unix timestamp. CLI/API <code>hours</code> must be
+finite and positive. Retention affects available history: metrics are not a permanent audit
+log or an SLA guarantee. Queries take a coherent read-only snapshot, omit inputs, outputs,
+and exception messages, and never migrate or create a missing database. Call the Python
+function outside an existing transaction.</p>
 <h2 id="export-a-diagnostic-report">Export a diagnostic report</h2>
 <p>Use <strong>Download report</strong> in the local inspector to save a JSON snapshot of the selected
 run, its definition, checkpoint metadata, complete attempt history, signal names, and recent
@@ -421,7 +457,7 @@ retrace --db jobs.db serve --port 7760
 </code></pre>
 <p>Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.</p>
-<p><code>runs</code>, <code>inspect</code>, <code>events</code>, <code>report</code>, <code>backup</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
+<p><code>health</code>, <code>runs</code>, <code>inspect</code>, <code>events</code>, <code>report</code>, <code>backup</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
 in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.</p>
@@ -450,6 +486,7 @@ of the loaded window.</p>
   e.g. <code>/api/runs?status=failed&amp;status=waiting&amp;workflow=ingestion&amp;limit=25</code>.</li>
 <li><code>GET /api/runs/{id}</code>: run manifest/input, task checkpoints, and attempt history.</li>
 <li><code>GET /api/runs/{id}/report</code>: a diagnostic report without application payloads or errors.</li>
+<li><code>GET /api/health?hours=24</code>: workflow reliability metrics for a creation-time cohort.</li>
 <li><code>GET /api/runs/{id}/events?after={cursor}</code>: up to 500 events and next cursor.</li>
 </ul>
 <p>All responses are JSON with <code>Cache-Control: no-store</code>. Read-only requests open their own database
@@ -471,6 +508,7 @@ fetch cursors or discard nonmatching incoming events. For the complete journal, 
 <a class="toc-level-2" href="#durable-run-cancellation">Durable run cancellation</a>
 <a class="toc-level-2" href="#explicit-retry-and-preview">Explicit retry and preview</a>
 <a class="toc-level-2" href="#find-runs-and-page-through-history">Find runs and page through history</a>
+<a class="toc-level-2" href="#measure-workflow-health">Measure workflow health</a>
 <a class="toc-level-2" href="#export-a-diagnostic-report">Export a diagnostic report</a>
 <a class="toc-level-2" href="#back-up-and-restore-a-database">Back up and restore a database</a>
 <a class="toc-level-2" href="#retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</a>

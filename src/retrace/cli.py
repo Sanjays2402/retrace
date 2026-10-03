@@ -104,6 +104,10 @@ def parser() -> argparse.ArgumentParser:
         "--crash", action="store_true", help="hard-exit during embedding; resume afterward"
     )
     runs = commands.add_parser("runs", help="list recent runs as JSON")
+    health = commands.add_parser("health", help="workflow failure rates and completion latency")
+    health.add_argument(
+        "--hours", type=float, default=24, help="creation-time lookback in hours (default: 24)"
+    )
     runs.add_argument("--limit", type=int, default=100, help="maximum runs to list (default: 100)")
     runs.add_argument("--status", action="append", help="run status; repeat to match several")
     runs.add_argument("--workflow", help="exact workflow name, across versions")
@@ -153,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             serve(args.db, args.port)
             return 0
         readonly = (
-            args.command in ("runs", "inspect", "events", "trace", "report", "backup")
+            args.command in ("runs", "inspect", "events", "trace", "report", "backup", "health")
             or (args.command == "queue" and args.configure is None)
             or (args.command == "retry" and args.dry_run)
             or (args.command == "prune" and not args.apply)
@@ -168,6 +172,17 @@ def main(argv: list[str] | None = None) -> int:
                             workflow=args.workflow,
                             before=args.before,
                         ),
+                        indent=2,
+                    )
+                )
+            elif args.command == "health":
+                from retrace.health import workflow_health
+
+                if not math.isfinite(args.hours) or args.hours <= 0:
+                    raise ValueError("hours must be finite and positive")
+                print(
+                    json.dumps(
+                        workflow_health(store, since=max(0, time.time() - args.hours * 3600)),
                         indent=2,
                     )
                 )

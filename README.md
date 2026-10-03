@@ -245,6 +245,7 @@ retrace runs --status failed --status waiting # find runs needing attention
 retrace runs --workflow ingestion --limit 25 # filter by workflow name
 retrace runs --before <LAST_RUN_ID> # page through older history
 retrace report <RUN_ID> > run.report.json # diagnostics without application payloads
+retrace health --hours 168      # workflow reliability and completion latency
 retrace events <RUN_ID> > events.jsonl
 ```
 
@@ -283,6 +284,7 @@ asyncio.run(main())
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
 | Diagnostic reports | Download a coherent run snapshot with checkpoints, retry history, and recent events; application payloads are omitted by default |
+| Workflow health | Compare failure rates, p50/p95 completion time, recovered runs, failed attempts, and expired leases across workflow definitions |
 | Run history search | Combine status and workflow filters, with stable pagination through older runs via Python, CLI, and inspector API |
 | Run retention | Preview and atomically remove old terminal runs; unfinished work and submission keys stay protected |
 | Online backups | Checked standalone SQLite snapshots including committed WAL data, with no-overwrite publication |

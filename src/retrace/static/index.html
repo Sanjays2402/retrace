@@ -67,6 +67,43 @@
           ><small>Failed, paused, or interrupted</small>
         </div>
       </section>
+      <section class="health-panel panel" aria-labelledby="health-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="health-title">Workflow health</h2>
+            <p class="muted">Reliability across workflow definitions</p>
+          </div>
+          <label
+            >Created within
+            <select id="health-window" aria-label="Health lookback">
+              <option value="24">24 hours</option>
+              <option value="168">7 days</option>
+              <option value="720">30 days</option>
+            </select></label
+          >
+        </div>
+        <p id="health-scope" class="muted" role="status">
+          Loading workflow health…
+        </p>
+        <div class="health-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Failed / completed</th>
+                <th>p95 elapsed</th>
+                <th>Failed attempts</th>
+                <th>Expired leases</th>
+              </tr>
+            </thead>
+            <tbody id="health-rows"></tbody>
+          </table>
+        </div>
+        <p class="muted health-note">
+          Elapsed time includes queueing, signal waits, and recovery. Cancelled
+          and unfinished runs are excluded from failure rates.
+        </p>
+      </section>
       <section class="execution-layout">
         <aside class="runs-panel panel">
           <div class="panel-heading">

@@ -51,6 +51,16 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
             self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
 
+    def test_workflow_health_route_and_lookback_validation(self):
+        status, _, body = self.request("/api/health?hours=24")
+        self.assertEqual(status, 200)
+        health = json.loads(body)
+        self.assertEqual(health["sampled_runs"], 1)
+        self.assertEqual(health["workflows"][0]["failure_rate"], 0)
+        self.assertNotIn("<script>", body.decode())
+        for hours in ("0", "-1", "nan", "inf", "", "bad"):
+            self.assertEqual(self.request("/api/health?hours=" + hours)[0], 400)
+
     def test_snapshot_and_event_cursor(self):
         status, _, body = self.request("/api/runs")
         self.assertEqual(status, 200)

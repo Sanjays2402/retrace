@@ -481,3 +481,39 @@ test("diagnostic report downloads omit application data and follow selection", a
     `/api/runs/${report.run.id}/report`,
   );
 });
+
+test("workflow health shows outcomes, recovered failures, and a selectable cohort", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const failed = page
+    .locator("#health-rows tr")
+    .filter({ hasText: "failed-run" });
+  await expect(failed).toContainText("1 / 1 (100.0%)");
+  const recovered = page
+    .locator("#health-rows tr")
+    .filter({ hasText: "recovered-run" });
+  await expect(recovered).toContainText("1 recovered after failure");
+  await expect(recovered).toContainText("0 / 1 (0.0%)");
+  const waiting = page
+    .locator("#health-rows tr")
+    .filter({ hasText: "waiting-run" });
+  await expect(waiting).toContainText("0 / 0 (—)");
+  const changed = page.waitForResponse("**/api/health?hours=168");
+  await page.locator("#health-window").selectOption("168");
+  await changed;
+  await expect(page.locator("#health-scope")).toContainText("168 hours");
+});
+
+test("health failures leave run inspection working and recover on refresh", async ({
+  page,
+}) => {
+  await page.route("**/api/health?*", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.locator("#health-scope")).toContainText("unavailable");
+  await expect(page.locator(".node")).toHaveCount(8);
+  await expect(page.locator("#connection")).toContainText("Live");
+  await page.unroute("**/api/health?*");
+  await page.locator("#refresh").click();
+  await expect(page.locator("#health-rows tr")).toHaveCount(5);
+});

@@ -260,6 +260,49 @@ Run status can change between requests, so pagination is a live view, not a froz
 Stop when a page is empty. Limits retain the existing bounds of 1–1000 (default 100).
 Queries remain read-only and return the existing JSON array of summaries.
 
+## Measure workflow health
+
+The local inspector's **Workflow health** panel compares workflow definitions over 24 hours,
+7 days, or 30 days, updating every 10 seconds. This helps operators find failing workflows,
+slow completion, recurring failed attempts, and running jobs whose worker leases expired.
+Metrics are computed from the real SQLite database independently of the loaded run list.
+
+```bash
+retrace --db jobs.db health
+retrace --db jobs.db health --hours 168 > weekly-health.json
+```
+
+```python
+from retrace.health import workflow_health
+
+with Store("jobs.db", readonly=True) as store:
+    metrics = workflow_health(store, since=unix_timestamp, limit=10000)
+```
+
+The period is a **creation-time cohort**: it includes runs created at or after `since`,
+and uses their current status and all retained attempt history. It does not count every
+completion that happened during the period. Each group has its own workflow name, version,
+and fingerprint, so different definitions are not silently mixed.
+
+- `failure_rate` is failed runs divided by succeeded plus failed runs. Cancelled, queued,
+  paused, waiting, and running runs do not enter the denominator. With no completed runs,
+  it is `null`, not an invented 0% success rate.
+- `p50_completion_seconds` and `p95_completion_seconds` use nearest-rank percentiles of
+  creation-to-final-update elapsed time for succeeded and failed runs. Queue delay, signal
+  waits, downtime, and manual retries are included; these are not task execution durations.
+- `failed_attempts` and `interrupted_attempts` count retained attempts with those statuses.
+  `recovered_runs` counts succeeded runs that have at least one failed attempt.
+- `expired_leases` counts currently running runs whose lease expired by `captured_at`.
+  It indicates recovery eligibility, not proof a worker process is dead.
+
+The latest 10,000 matching runs are sampled by default. `matched_runs`, `sampled_runs`,
+`limit`, and `truncated` make that scope explicit. Python limits must be integers from 1
+to 10,000; `since` must be a finite nonnegative Unix timestamp. CLI/API `hours` must be
+finite and positive. Retention affects available history: metrics are not a permanent audit
+log or an SLA guarantee. Queries take a coherent read-only snapshot, omit inputs, outputs,
+and exception messages, and never migrate or create a missing database. Call the Python
+function outside an existing transaction.
+
 ## Export a diagnostic report
 
 Use **Download report** in the local inspector to save a JSON snapshot of the selected
@@ -427,7 +470,7 @@ retrace --db jobs.db serve --port 7760
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`runs`, `inspect`, `events`, `report`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
+`health`, `runs`, `inspect`, `events`, `report`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
@@ -460,6 +503,7 @@ The local server starts only if the database exists. It serves:
   e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
 - `GET /api/runs/{id}/report`: a diagnostic report without application payloads or errors.
+- `GET /api/health?hours=24`: workflow reliability metrics for a creation-time cohort.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 
 All responses are JSON with `Cache-Control: no-store`. Read-only requests open their own database

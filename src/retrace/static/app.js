@@ -581,3 +581,41 @@ function readLocation() {
 }
 window.addEventListener("hashchange", readLocation);
 readLocation();
+
+let healthBusy = false;
+async function refreshHealth() {
+  if (healthBusy) return;
+  healthBusy = true;
+  const hours = $("health-window").value;
+  try {
+    const health = await api(`/api/health?hours=${hours}`);
+    if (hours !== $("health-window").value) return;
+    $("health-scope").textContent =
+      `${health.sampled_runs} runs created in the last ${hours} hours · ${health.truncated ? `latest ${health.limit} of ${health.matched_runs} matching runs · ` : ""}updates every 10 seconds`;
+    $("health-rows").innerHTML = health.workflows.length
+      ? health.workflows
+          .map((item) => {
+            const failed = item.statuses.failed || 0;
+            const rate =
+              item.failure_rate === null
+                ? "—"
+                : `${(item.failure_rate * 100).toFixed(1)}%`;
+            const latency =
+              item.p95_completion_seconds === null
+                ? "—"
+                : duration(item.p95_completion_seconds);
+            return `<tr><td>${escapeHTML(item.name)}<small>v${escapeHTML(item.version)} · ${item.runs} runs · ${item.recovered_runs} recovered after failure</small></td><td class="${failed ? "health-alert" : ""}">${failed} / ${item.completed_runs} (${rate})</td><td>${escapeHTML(latency)}</td><td>${item.failed_attempts}</td><td class="${item.expired_leases ? "health-alert" : ""}">${item.expired_leases}</td></tr>`;
+          })
+          .join("")
+      : '<tr><td colspan="5">No runs created in this period.</td></tr>';
+  } catch {
+    $("health-scope").textContent = "Workflow health unavailable · retrying";
+  } finally {
+    healthBusy = false;
+    if (hours !== $("health-window").value) refreshHealth();
+  }
+}
+$("health-window").addEventListener("change", refreshHealth);
+$("refresh").addEventListener("click", refreshHealth);
+setInterval(refreshHealth, 10000);
+refreshHealth();

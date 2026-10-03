@@ -61,6 +61,17 @@ class CLITests(unittest.TestCase):
         self.assertEqual(full["tasks"]["total"]["output"], 6)
         self.assertEqual(self.invoke("report", run_id, "--event-limit", "1001")[0], 2)
 
+    def test_health_is_readonly_and_validates_lookback(self):
+        self.assertEqual(self.invoke("health")[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        self.invoke("submit", "examples.pipeline:workflow")
+        code, out, err = self.invoke("health", "--hours", "168")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["sampled_runs"], 1)
+        self.assertIsNone(json.loads(out)["workflows"][0]["failure_rate"])
+        for hours in ("0", "-1", "nan", "inf"):
+            self.assertEqual(self.invoke("health", "--hours", hours)[0], 2)
+
     def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
         self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
         self.assertFalse(Path(self.db).exists())
