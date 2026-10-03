@@ -183,6 +183,20 @@ committed; eligible blocked descendants are reopened. Shared downstream steps re
 while any dependency is still failed. Attempt numbers, idempotency keys, and history are preserved.
 See [the recovery guide](docs/recovery.md) for a runnable example and the exact failure-budget rules.
 
+## Back up a live database
+
+```bash
+mkdir backups
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db backups/before-cleanup.db runs
+```
+
+Backups include committed WAL data, checkpoints, signals, submission keys, and event history.
+Retrace checks the copy and publishes one standalone database file without overwriting an
+existing destination. Use the backup as a separate database path to inspect or recover runs.
+See [backup and restore](https://sanjays2402.github.io/retrace/docs/api/#back-up-and-restore-a-database)
+for active-lease handling and the external side-effect replay window.
+
 ## Clean up old history
 
 ```bash
@@ -265,6 +279,7 @@ asyncio.run(main())
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
 | Run retention | Preview and atomically remove old terminal runs; unfinished work and submission keys stay protected |
+| Online backups | Checked standalone SQLite snapshots including committed WAL data, with no-overwrite publication |
 | Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
 | Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |

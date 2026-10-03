@@ -9,11 +9,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import sqlite3
+import tempfile
 import time
 import uuid
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from graphlib import TopologicalSorter
 from pathlib import Path
@@ -68,6 +70,14 @@ class PrunePlan:
     events: int
     signals: int
     protected_keyed_runs: int
+
+
+@dataclass(frozen=True)
+class BackupResult:
+    path: str
+    size_bytes: int
+    schema_version: int
+    runs: int
 
 
 _SCHEMA = """
@@ -185,6 +195,69 @@ class Store:
 
     def __exit__(self, *_: Any) -> None:
         self.close()
+
+    def backup(self, destination: str | Path, *, timeout: float = 30.0) -> BackupResult:
+        """Publish a checked standalone snapshot without overwriting an existing path.
+
+        Uses SQLite's online backup API to include committed WAL data. Call
+        outside a transaction; a read-only source connection is supported.
+        The copy deadline is checked between backup iterations, including lock retries.
+        """
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("backup timeout must be finite and positive")
+        if self.db.in_transaction:
+            raise ValueError("backup must be called outside a transaction")
+        destination = Path(destination).absolute()
+        if any(
+            os.path.lexists(str(destination) + suffix)
+            for suffix in ("", "-wal", "-shm", "-journal")
+        ):
+            raise FileExistsError(
+                f"backup destination or SQLite sidecars already exist: {destination}"
+            )
+        if self.path != ":memory:":
+            source = Path(self.path).resolve()
+            if destination.resolve() in {
+                Path(str(source) + suffix) for suffix in ("", "-wal", "-shm", "-journal")
+            }:
+                raise ValueError("backup destination cannot be the source database or its sidecars")
+        descriptor, name = tempfile.mkstemp(
+            prefix=".retrace-backup-", suffix=".db", dir=destination.parent
+        )
+        os.close(descriptor)
+        temporary = Path(name)
+        try:
+            deadline = time.monotonic() + timeout
+
+            def progress(_status: int, _remaining: int, _total: int) -> None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("backup copy exceeded its timeout")
+
+            with closing(sqlite3.connect(temporary, isolation_level=None)) as snapshot:
+                self.db.backup(snapshot, pages=256, progress=progress, sleep=0.05)
+                # Consolidate the copy into one file, independent of source WAL files.
+                snapshot.execute("PRAGMA journal_mode=DELETE")
+                if snapshot.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise sqlite3.DatabaseError("backup failed integrity check")
+                if snapshot.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise sqlite3.DatabaseError("backup failed foreign key check")
+                version = snapshot.execute("PRAGMA user_version").fetchone()[0]
+                runs = snapshot.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+            with temporary.open("r+b") as file:
+                os.fsync(file.fileno())
+            result = BackupResult(str(destination), temporary.stat().st_size, version, runs)
+            # A hard link publishes only a complete file and fails if another
+            # process created the destination since our initial existence check.
+            os.link(temporary, destination)
+            return result
+        finally:
+            for suffix in ("", "-wal", "-shm", "-journal"):
+                Path(str(temporary) + suffix).unlink(missing_ok=True)
 
     @contextmanager
     def transaction(self, *, immediate: bool = True) -> Iterator[None]:

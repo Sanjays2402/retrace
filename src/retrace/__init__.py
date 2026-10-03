@@ -2,6 +2,7 @@
 
 from retrace.engine import Engine, RunResult
 from retrace.store import (
+    BackupResult,
     DefinitionMismatch,
     LeaseLost,
     PrunePlan,
@@ -14,6 +15,7 @@ from retrace.worker import Worker
 from retrace.workflow import Context, RetryPolicy, Task, Workflow
 
 __all__ = [
+    "BackupResult",
     "Context",
     "DefinitionMismatch",
     "Engine",

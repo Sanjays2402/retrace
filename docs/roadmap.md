@@ -18,6 +18,7 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
   reused across restarts and compatibility for default-policy workflows.
 - Whole-run retention with read-only preview, bounded atomic deletion, and protection for
   unfinished work, submission keys, and retained event cursors.
+- Checked online database backups, no-overwrite publication, and restore from saved checkpoints.
 
 ## Small, well-scoped contributions
 

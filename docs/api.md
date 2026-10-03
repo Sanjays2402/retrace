@@ -224,6 +224,58 @@ all dependencies are already successful or included in the recovery plan. The ru
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. [Read the full recovery contract](recovery.md).
 
+## Back up and restore a database
+
+```bash
+mkdir backups
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db backups/before-cleanup.db runs
+```
+
+`backup DESTINATION` opens the source read-only and uses the
+[SQLite online backup API](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup).
+It includes committed WAL data while other connections may continue writing. The snapshot
+contains the schema, inputs, checkpoints, attempts, signals, submission keys, queue policies,
+and event sequences. It is a consistent database snapshot; it does not include separately
+stored files or external service state.
+
+The destination's parent directory must exist. Existing files, symlinks, and SQLite sidecars
+at the destination are rejected; source database and sidecar paths are also rejected. Retrace
+copies into a private temporary file, checks SQLite integrity and foreign keys, consolidates
+it into a standalone database, then publishes it without overwriting an existing path. Failed
+copies are removed. Publication requires a filesystem that supports hard links. On POSIX,
+the backup keeps the temporary file's owner-only permissions.
+
+`--timeout 30` sets a finite positive copy timeout in seconds, checked between page batches
+and lock retries. It does not limit the subsequent integrity checks or file publication. JSON output contains
+`path`, `size_bytes`, `schema_version`, and `runs`, all describing the completed snapshot.
+The source schema version is preserved; opening an older backup for writing applies the
+normal schema migrations.
+
+```python
+from retrace import Store
+
+with Store("jobs.db", readonly=True) as store:
+    result = store.backup("backups/before-cleanup.db", timeout=30)
+```
+
+`Store.backup(destination, *, timeout=30)` returns an immutable `BackupResult`. It also
+supports in-memory stores. Call it outside a transaction on the source connection.
+
+To restore, use the backup as a **separate database path**, inspect it first, and load the
+original workflow definition when resuming:
+
+```bash
+retrace --db backups/before-cleanup.db inspect RUN_ID
+retrace --db backups/before-cleanup.db resume my_pipeline:workflow RUN_ID
+```
+
+Stop the original workers before executing restored runs. Live leases in a snapshot must
+expire before takeover. Successful checkpoints are reused; external effects made after the
+snapshot may execute again. Retain downstream idempotency records and use the existing
+`ctx.idempotency_key` to handle that replay window. Stored backups contain the same private
+inputs and outputs as the original database.
+
 ## Retain useful runs and clean up old history
 
 ```bash
@@ -291,6 +343,7 @@ retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect <RUN_ID>
 retrace --db jobs.db events <RUN_ID> --after 42
+retrace --db jobs.db backup backups/before-cleanup.db
 retrace --db jobs.db prune --older-than 30
 retrace --db jobs.db serve --port 7760
 ```
@@ -298,7 +351,7 @@ retrace --db jobs.db serve --port 7760
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`runs`, `inspect`, `events`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
+`runs`, `inspect`, `events`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.

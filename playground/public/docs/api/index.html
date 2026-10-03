@@ -263,6 +263,45 @@ Live ownership raises <code>RunBusy</code>; changed definitions raise <code>Defi
 all dependencies are already successful or included in the recovery plan. The run can remain
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. <a href="../recovery/">Read the full recovery contract</a>.</p>
+<h2 id="back-up-and-restore-a-database">Back up and restore a database</h2>
+<pre><code class="language-bash">mkdir backups
+retrace --db jobs.db backup backups/before-cleanup.db
+retrace --db backups/before-cleanup.db runs
+</code></pre>
+<p><code>backup DESTINATION</code> opens the source read-only and uses the
+<a href="https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup">SQLite online backup API</a>.
+It includes committed WAL data while other connections may continue writing. The snapshot
+contains the schema, inputs, checkpoints, attempts, signals, submission keys, queue policies,
+and event sequences. It is a consistent database snapshot; it does not include separately
+stored files or external service state.</p>
+<p>The destination's parent directory must exist. Existing files, symlinks, and SQLite sidecars
+at the destination are rejected; source database and sidecar paths are also rejected. Retrace
+copies into a private temporary file, checks SQLite integrity and foreign keys, consolidates
+it into a standalone database, then publishes it without overwriting an existing path. Failed
+copies are removed. Publication requires a filesystem that supports hard links. On POSIX,
+the backup keeps the temporary file's owner-only permissions.</p>
+<p><code>--timeout 30</code> sets a finite positive copy timeout in seconds, checked between page batches
+and lock retries. It does not limit the subsequent integrity checks or file publication. JSON output contains
+<code>path</code>, <code>size_bytes</code>, <code>schema_version</code>, and <code>runs</code>, all describing the completed snapshot.
+The source schema version is preserved; opening an older backup for writing applies the
+normal schema migrations.</p>
+<pre><code class="language-python">from retrace import Store
+
+with Store(&quot;jobs.db&quot;, readonly=True) as store:
+    result = store.backup(&quot;backups/before-cleanup.db&quot;, timeout=30)
+</code></pre>
+<p><code>Store.backup(destination, *, timeout=30)</code> returns an immutable <code>BackupResult</code>. It also
+supports in-memory stores. Call it outside a transaction on the source connection.</p>
+<p>To restore, use the backup as a <strong>separate database path</strong>, inspect it first, and load the
+original workflow definition when resuming:</p>
+<pre><code class="language-bash">retrace --db backups/before-cleanup.db inspect RUN_ID
+retrace --db backups/before-cleanup.db resume my_pipeline:workflow RUN_ID
+</code></pre>
+<p>Stop the original workers before executing restored runs. Live leases in a snapshot must
+expire before takeover. Successful checkpoints are reused; external effects made after the
+snapshot may execute again. Retain downstream idempotency records and use the existing
+<code>ctx.idempotency_key</code> to handle that replay window. Stored backups contain the same private
+inputs and outputs as the original database.</p>
 <h2 id="retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</h2>
 <pre><code class="language-bash"># Preview completed unkeyed runs last updated more than 30 days ago.
 retrace --db jobs.db prune --older-than 30 --limit 100
@@ -317,12 +356,13 @@ retrace --db jobs.db retry my_pipeline:workflow &lt;RUN_ID&gt; --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect &lt;RUN_ID&gt;
 retrace --db jobs.db events &lt;RUN_ID&gt; --after 42
+retrace --db jobs.db backup backups/before-cleanup.db
 retrace --db jobs.db prune --older-than 30
 retrace --db jobs.db serve --port 7760
 </code></pre>
 <p>Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.</p>
-<p><code>runs</code>, <code>inspect</code>, <code>events</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
+<p><code>runs</code>, <code>inspect</code>, <code>events</code>, <code>backup</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
 in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.</p>
@@ -359,6 +399,7 @@ fetch cursors or discard nonmatching incoming events. For the complete journal, 
 <a class="toc-level-2" href="#local-worker-pool">Local worker pool</a>
 <a class="toc-level-2" href="#durable-run-cancellation">Durable run cancellation</a>
 <a class="toc-level-2" href="#explicit-retry-and-preview">Explicit retry and preview</a>
+<a class="toc-level-2" href="#back-up-and-restore-a-database">Back up and restore a database</a>
 <a class="toc-level-2" href="#retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</a>
 <a class="toc-level-2" href="#cli">CLI</a>
 <a class="toc-level-2" href="#inspector-api">Inspector API</a>

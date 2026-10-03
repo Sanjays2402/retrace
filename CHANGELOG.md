@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `Store.backup` and a read-only-source `backup` CLI for standalone SQLite snapshots.
+- Include committed WAL state, verify integrity and foreign keys, and publish without overwriting files.
+- Add backup copy timeouts, temporary-file cleanup, and checkpoint restore/concurrent-writer tests.
+
 - Add whole-run retention with `Store.prune_plan`, `Store.prune`, and a preview-first `prune` CLI.
 - Protect unfinished and keyed runs; delete selected terminal runs and dependent records atomically.
 - Preserve event cursors and submission-key deduplication across cleanup batches.

@@ -114,6 +114,11 @@ def parser() -> argparse.ArgumentParser:
     events.add_argument("--after", type=int, default=0, help="exclusive event cursor")
     trace = commands.add_parser("trace", help="export Chrome Trace JSON for Perfetto")
     trace.add_argument("run_id")
+    backup = commands.add_parser("backup", help="save a checked standalone database snapshot")
+    backup.add_argument("destination", help="new backup file; existing paths are never overwritten")
+    backup.add_argument(
+        "--timeout", type=float, default=30, help="copy timeout in seconds (default: 30)"
+    )
     prune = commands.add_parser("prune", help="preview cleanup of old terminal unkeyed runs")
     prune.add_argument(
         "--older-than", type=float, required=True, metavar="DAYS", help="age in days"
@@ -137,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
             serve(args.db, args.port)
             return 0
         readonly = (
-            args.command in ("runs", "inspect", "events", "trace")
+            args.command in ("runs", "inspect", "events", "trace", "backup")
             or (args.command == "queue" and args.configure is None)
             or (args.command == "retry" and args.dry_run)
             or (args.command == "prune" and not args.apply)
@@ -161,6 +166,12 @@ def main(argv: list[str] | None = None) -> int:
                 from retrace.trace import export_trace
 
                 print(json.dumps(export_trace(store, args.run_id), allow_nan=False))
+            elif args.command == "backup":
+                print(
+                    json.dumps(
+                        asdict(store.backup(args.destination, timeout=args.timeout)), indent=2
+                    )
+                )
             elif args.command == "prune":
                 if not math.isfinite(args.older_than) or args.older_than <= 0:
                     raise ValueError("--older-than must be a finite positive number of days")

@@ -26,6 +26,23 @@ class CLITests(unittest.TestCase):
             code = main(["--db", self.db, *args])
         return code, out.getvalue(), err.getvalue()
 
+    def test_backup_uses_readonly_source_and_refuses_to_overwrite(self):
+        destination = str(Path(self.directory.name, "backup.db"))
+        self.assertEqual(self.invoke("backup", destination)[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        self.assertFalse(Path(destination).exists())
+        self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        code, out, err = self.invoke("backup", destination, "--timeout", "10")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["runs"], 1)
+        self.assertEqual(json.loads(out)["size_bytes"], Path(destination).stat().st_size)
+        before = Path(destination).read_bytes()
+        self.assertEqual(self.invoke("backup", destination)[0], 2)
+        self.assertEqual(Path(destination).read_bytes(), before)
+        self.assertEqual(self.invoke("backup", destination + ".new", "--timeout", "nan")[0], 2)
+        with Store(destination, readonly=True) as restored:
+            self.assertEqual(len(restored.runs()), 1)
+
     def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
         self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
         self.assertFalse(Path(self.db).exists())

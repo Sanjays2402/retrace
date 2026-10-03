@@ -203,6 +203,18 @@ never individual events from a retained run. It preserves SQLite's event sequenc
 cursors keep their meaning and future IDs do not rewind. Submission-key runs are protected
 because their run rows also serve as durable deduplication records. See the
 <a href="../api/#retain-useful-runs-and-clean-up-old-history">cleanup API and CLI</a> for age and batching rules.</p>
+<h2 id="online-snapshots">Online snapshots</h2>
+<p><code>Store.backup</code> copies SQLite's committed state through the online backup API using a
+separate destination connection. A read-only source can observe committed WAL frames;
+independent producers can continue writing. The resulting copy is consolidated into
+rollback-journal mode and checked for database integrity and foreign-key violations.
+It is closed and synced before a hard link publishes the complete file at a new path.
+The link fails if another process already created that destination. Temporary files are
+removed on failure and after publication. The source connection must not be in a transaction.</p>
+<p>Lease ownership and absolute retry deadlines are copied as stored, not reset. Restore
+therefore keeps the same fencing and recovery rules within the restored database. It does
+not fence workers still using the original database or undo external effects after the
+snapshot. See <a href="../api/#back-up-and-restore-a-database">backup and restore</a>.</p>
 <h2 id="commit-boundary-and-side-effects">Commit boundary and side effects</h2>
 <p>The result, task state, attempt state, and corresponding event commit in one transaction.
 If any write fails, all of those changes roll back. A completed checkpoint is therefore either
@@ -328,6 +340,7 @@ to measure your own disk/workload rather than assuming a throughput guarantee.</
 and <a href="https://sqlite.org/wal.html">SQLite WAL</a>.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../choosing-retrace/"><small>← PREVIOUS</small><strong>Is Retrace a fit?</strong></a><a href="../recovery/"><small>NEXT →</small><strong>Recovery contract</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/architecture.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#ownership-protocol">Ownership protocol</a>
 <a class="toc-level-2" href="#state-machines">State machines</a>
 <a class="toc-level-2" href="#whole-run-retention">Whole-run retention</a>
+<a class="toc-level-2" href="#online-snapshots">Online snapshots</a>
 <a class="toc-level-2" href="#commit-boundary-and-side-effects">Commit boundary and side effects</a>
 <a class="toc-level-2" href="#definition-and-data-contract">Definition and data contract</a>
 <a class="toc-level-2" href="#observation-and-security">Observation and security</a>

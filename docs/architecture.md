@@ -176,6 +176,21 @@ cursors keep their meaning and future IDs do not rewind. Submission-key runs are
 because their run rows also serve as durable deduplication records. See the
 [cleanup API and CLI](api.md#retain-useful-runs-and-clean-up-old-history) for age and batching rules.
 
+## Online snapshots
+
+`Store.backup` copies SQLite's committed state through the online backup API using a
+separate destination connection. A read-only source can observe committed WAL frames;
+independent producers can continue writing. The resulting copy is consolidated into
+rollback-journal mode and checked for database integrity and foreign-key violations.
+It is closed and synced before a hard link publishes the complete file at a new path.
+The link fails if another process already created that destination. Temporary files are
+removed on failure and after publication. The source connection must not be in a transaction.
+
+Lease ownership and absolute retry deadlines are copied as stored, not reset. Restore
+therefore keeps the same fencing and recovery rules within the restored database. It does
+not fence workers still using the original database or undo external effects after the
+snapshot. See [backup and restore](api.md#back-up-and-restore-a-database).
+
 ## Commit boundary and side effects
 
 The result, task state, attempt state, and corresponding event commit in one transaction.
