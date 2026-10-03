@@ -499,13 +499,45 @@ class Store:
             self._event(run_id, "signal.received", name=name)
             return True
 
-    def runs(self, limit: int = 100) -> list[dict[str, Any]]:
+    def runs(
+        self,
+        limit: int = 100,
+        *,
+        statuses: Sequence[str] | None = None,
+        workflow: str | None = None,
+        before: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List newest runs; before is an exclusive run-ID pagination cursor."""
+        if type(limit) is not int:
+            raise ValueError("run limit must be an integer")
+        clauses = []
+        parameters: list[Any] = []
+        if statuses is not None:
+            valid = {"pending", "running", "paused", "waiting", "succeeded", "failed", "cancelled"}
+            if isinstance(statuses, str) or not statuses or any(s not in valid for s in statuses):
+                raise ValueError("statuses must be a nonempty sequence of valid run statuses")
+            clauses.append(f"status IN ({','.join('?' for _ in statuses)})")
+            parameters.extend(statuses)
+        if workflow is not None:
+            if not isinstance(workflow, str) or not workflow:
+                raise ValueError("workflow must be a nonempty name")
+            clauses.append("name=?")
+            parameters.append(workflow)
+        if before is not None:
+            cursor = self.db.execute(
+                "SELECT created_at,id FROM runs WHERE id=?", (before,)
+            ).fetchone()
+            if cursor is None:
+                raise KeyError(before)
+            clauses.append("(created_at,id)<(?,?)")
+            parameters.extend((cursor["created_at"], cursor["id"]))
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
         return [
             dict(row)
             for row in self.db.execute(
-                """SELECT id,name,version,status,created_at,updated_at,lease_until,epoch
-            FROM runs ORDER BY created_at DESC LIMIT ?""",
-                (min(max(limit, 1), 1000),),
+                "SELECT id,name,version,status,created_at,updated_at,lease_until,epoch "
+                f"FROM runs{where} ORDER BY created_at DESC,id DESC LIMIT ?",
+                (*parameters, min(max(limit, 1), 1000)),
             )
         ]
 

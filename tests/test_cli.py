@@ -98,6 +98,32 @@ class CLITests(unittest.TestCase):
         self.assertEqual(len(full), 3)
         self.assertEqual(limited, full[:2])
 
+    def test_runs_filters_and_cursor(self):
+        for _ in range(3):
+            self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        all_runs = json.loads(self.invoke("runs")[1])
+        self.invoke("cancel", all_runs[1]["id"])
+        with Store(self.db, readonly=True) as store:
+            name = store.run(all_runs[0]["id"])["name"]
+        code, out, err = self.invoke("runs", "--status", "pending", "--workflow", name)
+        self.assertEqual(code, 0, err)
+        page = json.loads(out)
+        self.assertEqual([r["id"] for r in page], [all_runs[0]["id"], all_runs[2]["id"]])
+        page = json.loads(
+            self.invoke(
+                "runs",
+                "--before",
+                all_runs[0]["id"],
+                "--status",
+                "pending",
+                "--status",
+                "cancelled",
+            )[1]
+        )
+        self.assertEqual([r["id"] for r in page], [r["id"] for r in all_runs[1:]])
+        for args in (("--status", "typo"), ("--before", "missing"), ("--workflow", "")):
+            self.assertEqual(self.invoke("runs", *args)[0], 2)
+
     def test_submit_and_worker_once(self):
         code, out, err = self.invoke(
             "submit", "examples.pipeline:workflow", "--input", '{"values":[2,4]}'

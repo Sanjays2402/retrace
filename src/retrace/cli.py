@@ -105,6 +105,9 @@ def parser() -> argparse.ArgumentParser:
     )
     runs = commands.add_parser("runs", help="list recent runs as JSON")
     runs.add_argument("--limit", type=int, default=100, help="maximum runs to list (default: 100)")
+    runs.add_argument("--status", action="append", help="run status; repeat to match several")
+    runs.add_argument("--workflow", help="exact workflow name, across versions")
+    runs.add_argument("--before", metavar="RUN_ID", help="list runs older than this run")
     inspect = commands.add_parser("inspect", help="show run checkpoints and attempts as JSON")
     inspect.add_argument("run_id")
     events = commands.add_parser(
@@ -149,7 +152,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         with Store(args.db, readonly=readonly) as store:
             if args.command == "runs":
-                print(json.dumps(store.runs(limit=args.limit), indent=2))
+                print(
+                    json.dumps(
+                        store.runs(
+                            limit=args.limit,
+                            statuses=args.status,
+                            workflow=args.workflow,
+                            before=args.before,
+                        ),
+                        indent=2,
+                    )
+                )
             elif args.command == "inspect":
                 print(
                     json.dumps(

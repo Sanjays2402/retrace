@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add database-level run history filters for status and exact workflow name in Python, CLI, and inspector API.
+- Add exclusive run-ID pagination with deterministic timestamp tie-breaking and stable pages under new submissions.
+- Preserve existing listing response formats and read-only access; validate filters and missing cursors.
+
 - Add `Store.backup` and a read-only-source `backup` CLI for standalone SQLite snapshots.
 - Include committed WAL state, verify integrity and foreign keys, and publish without overwriting files.
 - Add backup copy timeouts, temporary-file cleanup, and checkpoint restore/concurrent-writer tests.

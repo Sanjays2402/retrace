@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Filtered run history by status and workflow, with exclusive cursor pagination in Python,
+  CLI, and the local inspector API.
+
 - Selective failed-branch retry with read-only preview, fresh failure budgets, and preserved history.
 - Inspector journal filters, payload search/expansion, and filtered JSONL export without losing incoming events.
 

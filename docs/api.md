@@ -224,6 +224,42 @@ all dependencies are already successful or included in the recovery plan. The ru
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. [Read the full recovery contract](recovery.md).
 
+## Find runs and page through history
+
+Filter run summaries at the database level to find work that needs attention, including
+runs older than the default 100-entry listing:
+
+```bash
+retrace --db jobs.db runs --status failed --status waiting
+retrace --db jobs.db runs --workflow ingestion --status failed --limit 25
+retrace --db jobs.db runs --workflow ingestion --status failed --limit 25 --before <LAST_RUN_ID>
+```
+
+Repeated status filters match **any** listed status. The workflow filter matches the exact
+workflow name across all versions; combine it with status filters to match both. Valid statuses
+are `pending`, `running`, `paused`, `waiting`, `succeeded`, `failed`, and `cancelled`.
+An expired worker lease still has persisted status `running` until recovery; this query does
+not reclassify it as paused or interrupted.
+
+```python
+page = store.runs(limit=25, statuses=["failed", "waiting"], workflow="ingestion")
+if page:
+    older = store.runs(
+        limit=25,
+        statuses=["failed", "waiting"],
+        workflow="ingestion",
+        before=page[-1]["id"],
+    )
+```
+
+Results sort by creation time descending, then run ID descending to resolve timestamp ties.
+Use the last returned run's ID as the exclusive `before` cursor. Newer submissions do not
+shift later pages. The cursor run need not match your filters. It must still exist: pruning
+it makes the cursor invalid (`KeyError` in Python, exit code 2 in the CLI, HTTP 404).
+Run status can change between requests, so pagination is a live view, not a frozen snapshot.
+Stop when a page is empty. Limits retain the existing bounds of 1–1000 (default 100).
+Queries remain read-only and return the existing JSON array of summaries.
+
 ## Back up and restore a database
 
 ```bash
@@ -369,7 +405,9 @@ failures appear in each result and do not stop the worker process.
 
 The local server starts only if the database exists. It serves:
 
-- `GET /api/runs`: latest 100 run summaries.
+- `GET /api/runs`: latest 100 run summaries. Optional `limit`, repeated `status`,
+  exact `workflow`, and exclusive `before` run-ID parameters filter and page results,
+  e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 
