@@ -382,10 +382,9 @@ function clearEventFilters() {
 async function refresh() {
   if (state.busy) return;
   state.busy = true;
-  $("load-runs").disabled = true;
-  $("reset-runs").disabled = true;
+  const requestedLimit = state.runLimit;
   try {
-    state.runs = (await api(`/api/runs?limit=${state.runLimit}`)).runs;
+    state.runs = (await api(`/api/runs?limit=${requestedLimit}`)).runs;
     if (!state.selected && state.runs.length) state.selected = state.runs[0].id;
     renderRuns();
     if (state.selected) {
@@ -414,15 +413,23 @@ async function refresh() {
     $("connection").className = "connection offline";
   } finally {
     state.busy = false;
-    $("load-runs").disabled = false;
-    $("reset-runs").disabled = false;
+    if (requestedLimit !== state.runLimit) {
+      refresh();
+    } else {
+      $("load-runs").disabled = false;
+      $("reset-runs").disabled = false;
+    }
   }
 }
 $("load-runs").addEventListener("click", () => {
+  $("load-runs").disabled = true;
+  $("reset-runs").disabled = true;
   state.runLimit = Math.min(1000, state.runLimit + 100);
   refresh();
 });
 $("reset-runs").addEventListener("click", () => {
+  $("load-runs").disabled = true;
+  $("reset-runs").disabled = true;
   state.runLimit = 100;
   refresh();
 });

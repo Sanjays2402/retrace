@@ -413,3 +413,44 @@ test("expanded history is bounded at one thousand runs", async ({ page }) => {
     "retrace runs --before",
   );
 });
+
+test("history changes made during a slow poll are fetched afterward", async ({
+  page,
+}) => {
+  let release;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  let signal;
+  const polling = new Promise((resolve) => {
+    signal = resolve;
+  });
+  let calls = 0;
+  await page.route("**/api/runs?limit=*", async (route) => {
+    const response = await route.fetch();
+    const sample = (await response.json()).runs[0];
+    const limit = Number(
+      new URL(route.request().url()).searchParams.get("limit"),
+    );
+    if (++calls === 2) {
+      signal();
+      await blocked;
+    }
+    await route.fulfill({
+      json: {
+        runs: Array.from({ length: limit }, (_, i) => ({
+          ...sample,
+          id: i === 0 ? sample.id : `slow-${i}`,
+        })),
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator(".run-card")).toHaveCount(100);
+  await polling;
+  await page.getByRole("button", { name: "Show 100 more" }).click();
+  await expect(page.locator("#load-runs")).toBeDisabled();
+  release();
+  await expect(page.locator(".run-card")).toHaveCount(200);
+  await expect(page.locator("#load-runs")).toBeEnabled();
+});

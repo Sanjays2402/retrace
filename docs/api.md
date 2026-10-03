@@ -407,7 +407,8 @@ The inspector starts with the latest 100 runs. **Show 100 more** expands the lis
 at a time, up to 1,000, while keeping polling active for the entire loaded list. Search,
 status filters, and summary counts apply to loaded runs. **Latest 100** reduces the list
 without changing the selected run or its checkpoints. The history count announces updates
-to screen readers, and controls are disabled during refresh to prevent duplicate requests.
+to screen readers, and controls are disabled while a requested history change loads.
+History changes made during live polling are fetched as soon as the active refresh finishes.
 At the 1,000-run cap, use `retrace runs --before <LAST_RUN_ID>` to browse older history.
 The expanded list remains a live view: new submissions can move the oldest entries out
 of the loaded window.
