@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Configurable operational health thresholds, with per-definition decisions and distinct
+  pass, breach, and insufficient-data outcomes for scripts.
+
 - Workflow health analytics with selectable creation-time cohorts, recovery metrics,
   latency percentiles, and expired-lease visibility in the local inspector.
 

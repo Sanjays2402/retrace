@@ -303,6 +303,57 @@ log or an SLA guarantee. Queries take a coherent read-only snapshot, omit inputs
 and exception messages, and never migrate or create a missing database. Call the Python
 function outside an existing transaction.
 
+## Check operational thresholds
+
+Add maximum thresholds to `health` when a script needs a machine-readable decision:
+
+```bash
+retrace --db jobs.db health --hours 168 \
+  --max-failure-rate 0.05 --max-p95-seconds 60 \
+  --max-expired-leases 0 --min-completed 20 > health-check.json
+```
+
+Thresholds apply **per workflow definition**, rather than hiding a failing definition in
+an aggregate average. Failure-rate thresholds are fractions from 0 to 1; latency thresholds
+are finite nonnegative seconds; expired-lease thresholds are nonnegative integers. Boundaries
+are inclusive: an observation equal to its maximum passes. Configure any combination.
+Without thresholds, `health` retains its metrics-only behavior and output format.
+
+The JSON includes a `checks` object with the overall status, configured thresholds, minimum
+sample size, reasons, and each definition's observed values and individual checks.
+
+| Exit code | Meaning with thresholds configured |
+| --- | --- |
+| `0` | Every configured check passed with adequate data |
+| `1` | At least one observed threshold was exceeded |
+| `2` | Invalid options or a database/infrastructure error |
+| `3` | No known breach, but insufficient data to pass |
+
+Rate and latency checks require at least `--min-completed` succeeded/failed runs per
+definition (default 5, positive integer). Waiting, running, and cancelled runs do not count
+toward this floor. Expired-lease checks do not require completed runs. Empty cohorts and
+truncated run samples cannot pass. A known breach takes precedence over insufficient data;
+the reasons and individual check statuses still describe both conditions.
+
+```python
+from retrace.health import evaluate_health, workflow_health
+
+with Store("jobs.db", readonly=True) as store:
+    metrics = workflow_health(store, since=unix_timestamp)
+checks = evaluate_health(
+    metrics,
+    max_failure_rate=0.05,
+    max_p95_seconds=60,
+    max_expired_leases=0,
+    min_completed=20,
+)
+```
+
+`evaluate_health` requires at least one threshold, reads a `workflow_health` result without
+mutating it, and performs no writes or network calls. Use the status or exit code in your
+own monitoring or deployment checks. These are observed cohort checks, not an SLA guarantee;
+the creation-time, latency, sampling, and retention semantics above still apply.
+
 ## Export a diagnostic report
 
 Use **Download report** in the local inspector to save a JSON snapshot of the selected
@@ -475,9 +526,10 @@ a missing database. Run IDs and progress guidance go to stderr; structured resul
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
 
-Exit codes: `0` success, `1` terminal workflow failure, `2` invalid input/definition or an
-infrastructure error, `130` graceful keyboard interruption. `demo --crash` intentionally exits
-with `86`. Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
+Exit codes: `0` success, `1` terminal workflow failure (or a configured health threshold breach), `2` invalid input/definition or an
+infrastructure error, `130` graceful keyboard interruption. Health checks additionally use `3`
+for insufficient data when no breach is known. `demo --crash` intentionally exits with `86`.
+Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
 `submit` returns a JSON object with the run ID, current status, and eligibility timestamp.
 `--delay` is a nonnegative number of seconds; `--key` provides idempotency within the database.
 `worker --once` prints a JSON array of

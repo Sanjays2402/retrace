@@ -89,3 +89,103 @@ def workflow_health(store: Store, *, since: float = 0, limit: int = 10000) -> di
         "truncated": total > len(rows),
         "workflows": workflows,
     }
+
+
+def evaluate_health(
+    metrics: dict,
+    *,
+    max_failure_rate: float | None = None,
+    max_p95_seconds: float | None = None,
+    max_expired_leases: int | None = None,
+    min_completed: int = 5,
+) -> dict:
+    """Evaluate maximum thresholds without treating missing data as a passing check.
+
+    Boundaries are inclusive. Failed checks take precedence over insufficient data.
+    A truncated or empty cohort cannot pass, even if every sampled check passes.
+    """
+    thresholds = {
+        "failure_rate": max_failure_rate,
+        "p95_completion_seconds": max_p95_seconds,
+        "expired_leases": max_expired_leases,
+    }
+    if all(value is None for value in thresholds.values()):
+        raise ValueError("configure at least one health threshold")
+    for value in (max_failure_rate, max_p95_seconds):
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+        ):
+            raise ValueError("health thresholds must be finite and nonnegative")
+    if max_failure_rate is not None and max_failure_rate > 1:
+        raise ValueError("max_failure_rate must be between 0 and 1")
+    if max_expired_leases is not None and (
+        type(max_expired_leases) is not int or max_expired_leases < 0
+    ):
+        raise ValueError("max_expired_leases must be a nonnegative integer")
+    if type(min_completed) is not int or min_completed < 1:
+        raise ValueError("min_completed must be a positive integer")
+
+    workflows = []
+    for item in metrics["workflows"]:
+        checks = []
+        for metric, maximum in thresholds.items():
+            if maximum is None:
+                continue
+            observed = item[metric]
+            insufficient = observed is None or (
+                metric != "expired_leases" and item["completed_runs"] < min_completed
+            )
+            status = (
+                "insufficient_data"
+                if insufficient
+                else "failed"
+                if observed > maximum
+                else "passed"
+            )
+            checks.append(
+                {"metric": metric, "maximum": maximum, "observed": observed, "status": status}
+            )
+        statuses = {check["status"] for check in checks}
+        status = (
+            "failed"
+            if "failed" in statuses
+            else "insufficient_data"
+            if "insufficient_data" in statuses
+            else "passed"
+        )
+        workflows.append(
+            {
+                "name": item["name"],
+                "version": item["version"],
+                "fingerprint": item["fingerprint"],
+                "completed_runs": item["completed_runs"],
+                "status": status,
+                "checks": checks,
+            }
+        )
+    reasons = []
+    if not workflows:
+        reasons.append("empty_cohort")
+    if metrics["truncated"]:
+        reasons.append("sample_truncated")
+    if any(
+        check["status"] == "insufficient_data" for item in workflows for check in item["checks"]
+    ):
+        reasons.append("insufficient_completed_runs")
+    status = (
+        "failed"
+        if any(item["status"] == "failed" for item in workflows)
+        else "insufficient_data"
+        if reasons
+        else "passed"
+    )
+    return {
+        "status": status,
+        "min_completed": min_completed,
+        "reasons": reasons,
+        "thresholds": {key: value for key, value in thresholds.items() if value is not None},
+        "workflows": workflows,
+    }

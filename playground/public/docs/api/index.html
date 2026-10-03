@@ -327,6 +327,66 @@ finite and positive. Retention affects available history: metrics are not a perm
 log or an SLA guarantee. Queries take a coherent read-only snapshot, omit inputs, outputs,
 and exception messages, and never migrate or create a missing database. Call the Python
 function outside an existing transaction.</p>
+<h2 id="check-operational-thresholds">Check operational thresholds</h2>
+<p>Add maximum thresholds to <code>health</code> when a script needs a machine-readable decision:</p>
+<pre><code class="language-bash">retrace --db jobs.db health --hours 168 \
+  --max-failure-rate 0.05 --max-p95-seconds 60 \
+  --max-expired-leases 0 --min-completed 20 &gt; health-check.json
+</code></pre>
+<p>Thresholds apply <strong>per workflow definition</strong>, rather than hiding a failing definition in
+an aggregate average. Failure-rate thresholds are fractions from 0 to 1; latency thresholds
+are finite nonnegative seconds; expired-lease thresholds are nonnegative integers. Boundaries
+are inclusive: an observation equal to its maximum passes. Configure any combination.
+Without thresholds, <code>health</code> retains its metrics-only behavior and output format.</p>
+<p>The JSON includes a <code>checks</code> object with the overall status, configured thresholds, minimum
+sample size, reasons, and each definition's observed values and individual checks.</p>
+<table>
+<thead>
+<tr>
+<th>Exit code</th>
+<th>Meaning with thresholds configured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td>Every configured check passed with adequate data</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>At least one observed threshold was exceeded</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>Invalid options or a database/infrastructure error</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>No known breach, but insufficient data to pass</td>
+</tr>
+</tbody>
+</table>
+<p>Rate and latency checks require at least <code>--min-completed</code> succeeded/failed runs per
+definition (default 5, positive integer). Waiting, running, and cancelled runs do not count
+toward this floor. Expired-lease checks do not require completed runs. Empty cohorts and
+truncated run samples cannot pass. A known breach takes precedence over insufficient data;
+the reasons and individual check statuses still describe both conditions.</p>
+<pre><code class="language-python">from retrace.health import evaluate_health, workflow_health
+
+with Store(&quot;jobs.db&quot;, readonly=True) as store:
+    metrics = workflow_health(store, since=unix_timestamp)
+checks = evaluate_health(
+    metrics,
+    max_failure_rate=0.05,
+    max_p95_seconds=60,
+    max_expired_leases=0,
+    min_completed=20,
+)
+</code></pre>
+<p><code>evaluate_health</code> requires at least one threshold, reads a <code>workflow_health</code> result without
+mutating it, and performs no writes or network calls. Use the status or exit code in your
+own monitoring or deployment checks. These are observed cohort checks, not an SLA guarantee;
+the creation-time, latency, sampling, and retention semantics above still apply.</p>
 <h2 id="export-a-diagnostic-report">Export a diagnostic report</h2>
 <p>Use <strong>Download report</strong> in the local inspector to save a JSON snapshot of the selected
 run, its definition, checkpoint metadata, complete attempt history, signal names, and recent
@@ -461,9 +521,10 @@ is added temporarily to the import path so project-local definitions are importa
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
 in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.</p>
-<p>Exit codes: <code>0</code> success, <code>1</code> terminal workflow failure, <code>2</code> invalid input/definition or an
-infrastructure error, <code>130</code> graceful keyboard interruption. <code>demo --crash</code> intentionally exits
-with <code>86</code>. Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
+<p>Exit codes: <code>0</code> success, <code>1</code> terminal workflow failure (or a configured health threshold breach), <code>2</code> invalid input/definition or an
+infrastructure error, <code>130</code> graceful keyboard interruption. Health checks additionally use <code>3</code>
+for insufficient data when no breach is known. <code>demo --crash</code> intentionally exits with <code>86</code>.
+Ctrl-C pauses active work; a hard kill leaves a lease that must expire before resume.
 <code>submit</code> returns a JSON object with the run ID, current status, and eligibility timestamp.
 <code>--delay</code> is a nonnegative number of seconds; <code>--key</code> provides idempotency within the database.
 <code>worker --once</code> prints a JSON array of
@@ -509,6 +570,7 @@ fetch cursors or discard nonmatching incoming events. For the complete journal, 
 <a class="toc-level-2" href="#explicit-retry-and-preview">Explicit retry and preview</a>
 <a class="toc-level-2" href="#find-runs-and-page-through-history">Find runs and page through history</a>
 <a class="toc-level-2" href="#measure-workflow-health">Measure workflow health</a>
+<a class="toc-level-2" href="#check-operational-thresholds">Check operational thresholds</a>
 <a class="toc-level-2" href="#export-a-diagnostic-report">Export a diagnostic report</a>
 <a class="toc-level-2" href="#back-up-and-restore-a-database">Back up and restore a database</a>
 <a class="toc-level-2" href="#retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</a>

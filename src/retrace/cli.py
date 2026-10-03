@@ -108,6 +108,19 @@ def parser() -> argparse.ArgumentParser:
     health.add_argument(
         "--hours", type=float, default=24, help="creation-time lookback in hours (default: 24)"
     )
+    health.add_argument(
+        "--max-failure-rate", type=float, help="maximum failed/completed fraction (0–1)"
+    )
+    health.add_argument("--max-p95-seconds", type=float, help="maximum p95 completion elapsed time")
+    health.add_argument(
+        "--max-expired-leases", type=int, help="maximum expired leases per definition"
+    )
+    health.add_argument(
+        "--min-completed",
+        type=int,
+        default=5,
+        help="completed runs required for rate/latency checks (default: 5)",
+    )
     runs.add_argument("--limit", type=int, default=100, help="maximum runs to list (default: 100)")
     runs.add_argument("--status", action="append", help="run status; repeat to match several")
     runs.add_argument("--workflow", help="exact workflow name, across versions")
@@ -176,16 +189,33 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
             elif args.command == "health":
-                from retrace.health import workflow_health
+                from retrace.health import evaluate_health, workflow_health
 
                 if not math.isfinite(args.hours) or args.hours <= 0:
                     raise ValueError("hours must be finite and positive")
-                print(
-                    json.dumps(
-                        workflow_health(store, since=max(0, time.time() - args.hours * 3600)),
-                        indent=2,
+                if args.min_completed < 1:
+                    raise ValueError("min-completed must be positive")
+                metrics = workflow_health(store, since=max(0, time.time() - args.hours * 3600))
+                if any(
+                    value is not None
+                    for value in (
+                        args.max_failure_rate,
+                        args.max_p95_seconds,
+                        args.max_expired_leases,
                     )
-                )
+                ):
+                    metrics["checks"] = evaluate_health(
+                        metrics,
+                        max_failure_rate=args.max_failure_rate,
+                        max_p95_seconds=args.max_p95_seconds,
+                        max_expired_leases=args.max_expired_leases,
+                        min_completed=args.min_completed,
+                    )
+                    print(json.dumps(metrics, indent=2))
+                    return {"passed": 0, "failed": 1, "insufficient_data": 3}[
+                        metrics["checks"]["status"]
+                    ]
+                print(json.dumps(metrics, indent=2))
             elif args.command == "inspect":
                 print(
                     json.dumps(

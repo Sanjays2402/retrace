@@ -72,6 +72,29 @@ class CLITests(unittest.TestCase):
         for hours in ("0", "-1", "nan", "inf"):
             self.assertEqual(self.invoke("health", "--hours", hours)[0], 2)
 
+    def test_health_threshold_exit_codes_and_json(self):
+        self.invoke("submit", "examples.pipeline:workflow")
+        code, out, _ = self.invoke("health", "--max-expired-leases", "0")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["checks"]["status"], "passed")
+        code, out, _ = self.invoke("health", "--max-failure-rate", "0")
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(out)["checks"]["status"], "insufficient_data")
+        self.invoke("run", "examples.pipeline:workflow", "--input", '{"values":[1]}')
+        code, out, _ = self.invoke("health", "--max-failure-rate", "0", "--min-completed", "1")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["checks"]["status"], "passed")
+        code, out, _ = self.invoke("health", "--max-p95-seconds", "0", "--min-completed", "1")
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(out)["checks"]["status"], "failed")
+        for args in (
+            ("--max-failure-rate", "nan"),
+            ("--max-failure-rate", "1.1"),
+            ("--max-expired-leases", "-1"),
+            ("--min-completed", "0"),
+        ):
+            self.assertEqual(self.invoke("health", *args)[0], 2)
+
     def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
         self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
         self.assertFalse(Path(self.db).exists())

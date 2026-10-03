@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add configurable operational health checks for failure rate, p95 completion time, and expired leases.
+- Return per-definition observed values and decisions, with exit codes for breach and insufficient data.
+- Require minimum completion samples for rate/latency checks; prevent empty or truncated cohorts from passing.
+
 - Add workflow health analytics in Python, CLI, inspector API, and a live dashboard panel.
 - Report cohort failure rates, p50/p95 completion latency, failed/interrupted attempts,
   recovered runs, and expired leases per workflow definition.
