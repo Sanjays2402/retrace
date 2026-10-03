@@ -16,6 +16,8 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 - Bounded graceful worker drain for local rolling restarts and immediate paused-run handoff.
 - Exception-based retry classification and optional full jitter, with persisted deadlines
   reused across restarts and compatibility for default-policy workflows.
+- Whole-run retention with read-only preview, bounded atomic deletion, and protection for
+  unfinished work, submission keys, and retained event cursors.
 
 ## Small, well-scoped contributions
 
@@ -24,8 +26,8 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Design proposals welcome
 
-- **Retention and compaction.** Define what can be removed without breaking checkpoint integrity,
-  incremental event cursors, or the recovery contract.
+- **Keyed-run expiration and compaction.** Define a deduplication lifetime and partial-history
+  contract beyond whole-run cleanup, without breaking event cursors or recovery.
 - **Storage evolution.** Transactional schema migrations with backup/rollback guidance and
   compatibility fixtures from prior releases.
 - **Scheduler efficiency.** Replace repeated full task snapshots with an incremental ready queue.

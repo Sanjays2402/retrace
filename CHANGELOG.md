@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add whole-run retention with `Store.prune_plan`, `Store.prune`, and a preview-first `prune` CLI.
+- Protect unfinished and keyed runs; delete selected terminal runs and dependent records atomically.
+- Preserve event cursors and submission-key deduplication across cleanup batches.
+
 - Add `RetryPolicy.non_retryable` to stop automatic retries for permanent errors and subclasses.
 - Add opt-in full jitter, sampled once per retry and persisted across recovery.
 - Preserve workflow fingerprints for existing default policies and document policy compatibility.

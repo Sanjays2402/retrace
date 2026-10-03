@@ -57,6 +57,19 @@ class RetryPlan:
     remaining_blocked: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PrunePlan:
+    """Cleanup preview or receipt; previews do not reserve runs for deletion."""
+
+    before: float
+    run_ids: tuple[str, ...]
+    tasks: int
+    attempts: int
+    events: int
+    signals: int
+    protected_keyed_runs: int
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, version TEXT NOT NULL,
@@ -188,6 +201,73 @@ class Store:
             "INSERT INTO events(run_id,task_name,kind,at,payload) VALUES(?,?,?,?,?)",
             (run_id, task, kind, time.time(), encode(payload)),
         )
+
+    def _prune_plan(self, before: float, limit: int, include_failed: bool) -> PrunePlan:
+        if self.schema_version < 4:
+            raise ValueError("cleanup requires schema v4; open the database for writing to migrate")
+        if (
+            isinstance(before, bool)
+            or not isinstance(before, (int, float))
+            or not math.isfinite(before)
+            or before < 0
+        ):
+            raise ValueError("before must be a finite nonnegative timestamp")
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("cleanup limit must be an integer between 1 and 500")
+        if type(include_failed) is not bool:
+            raise ValueError("include_failed must be a boolean")
+        statuses = (
+            ("succeeded", "cancelled", "failed") if include_failed else ("succeeded", "cancelled")
+        )
+        marks = ",".join("?" for _ in statuses)
+        eligible = f"status IN ({marks}) AND updated_at<? AND owner IS NULL"
+        parameters = (*statuses, before)
+        protected = self.db.execute(
+            f"SELECT COUNT(*) FROM runs WHERE {eligible} AND submission_key_hash IS NOT NULL",
+            parameters,
+        ).fetchone()[0]
+        ids = tuple(
+            row[0]
+            for row in self.db.execute(
+                f"SELECT id FROM runs WHERE {eligible} AND submission_key_hash IS NULL "
+                "ORDER BY updated_at,id LIMIT ?",
+                (*parameters, limit),
+            )
+        )
+        counts = []
+        for table in ("tasks", "attempts", "events", "signals"):
+            placeholders = ",".join("?" for _ in ids)
+            count = (
+                self.db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE run_id IN ({placeholders})", ids
+                ).fetchone()[0]
+                if ids
+                else 0
+            )
+            counts.append(count)
+        return PrunePlan(float(before), ids, *counts, protected)
+
+    def prune_plan(
+        self, before: float, *, limit: int = 100, include_failed: bool = False
+    ) -> PrunePlan:
+        """Preview whole terminal runs older than a Unix timestamp, without changing storage."""
+        with self.transaction(immediate=False):
+            return self._prune_plan(before, limit, include_failed)
+
+    def prune(self, before: float, *, limit: int = 100, include_failed: bool = False) -> PrunePlan:
+        """Atomically remove eligible unkeyed runs and all their dependent records.
+
+        Select again under the write lock; active, unfinished, and keyed runs
+        are always protected. Freed pages remain reusable inside SQLite.
+        """
+        with self.transaction():
+            plan = self._prune_plan(before, limit, include_failed)
+            for table in ("events", "signals", "attempts", "tasks", "runs"):
+                column = "id" if table == "runs" else "run_id"
+                self.db.executemany(
+                    f"DELETE FROM {table} WHERE {column}=?", ((run_id,) for run_id in plan.run_ids)
+                )
+            return plan
 
     def create(
         self,

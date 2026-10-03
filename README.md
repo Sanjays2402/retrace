@@ -183,6 +183,20 @@ committed; eligible blocked descendants are reopened. Shared downstream steps re
 while any dependency is still failed. Attempt numbers, idempotency keys, and history are preserved.
 See [the recovery guide](docs/recovery.md) for a runnable example and the exact failure-budget rules.
 
+## Clean up old history
+
+```bash
+retrace --db jobs.db prune --older-than 30             # preview only
+retrace --db jobs.db prune --older-than 30 --apply      # remove the selected batch
+```
+
+Cleanup removes old succeeded and cancelled runs with their checkpoints, attempts, signals,
+and events in one transaction. It protects unfinished work and runs with submission keys.
+Failed runs require `--include-failed`. Each batch defaults to 100 runs; retained event IDs
+stay unchanged. Save a backup or exported traces if you need the removed history.
+See [the retention guide](https://sanjays2402.github.io/retrace/docs/api/#retain-useful-runs-and-clean-up-old-history)
+for the Python API, batching rules, and deduplication guarantees.
+
 ## A workflow is ordinary Python
 
 ```python
@@ -250,6 +264,7 @@ asyncio.run(main())
 | Durable signals | One-shot JSON messages can arrive before or after a task waits; waiting runs release their worker lease |
 | Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
 | Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
+| Run retention | Preview and atomically remove old terminal runs; unfinished work and submission keys stay protected |
 | Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |
 | Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
 | Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |
@@ -300,10 +315,9 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes **74 tests**, process-level producer and worker contention, 25
+The Python suite includes process-level producer and worker contention, 25
 reproducible generated DAGs, transactional rollback injection, stale-worker fencing, persistent
-retry deadlines, HTTP security checks, and a real process-kill/restart test. Local Python 3.12
-verification reports **96% combined statement/branch coverage** and **100% for the scheduler**.
+retry deadlines, retention rollback and cursor checks, HTTP security checks, and a real process-kill/restart test.
 CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
 Fourteen Playwright browser tests cover real inspector interactions and failure states.
 The packaging job installs the built wheel into a clean environment outside the source tree.

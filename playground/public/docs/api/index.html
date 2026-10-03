@@ -263,6 +263,46 @@ Live ownership raises <code>RunBusy</code>; changed definitions raise <code>Defi
 all dependencies are already successful or included in the recovery plan. The run can remain
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. <a href="../recovery/">Read the full recovery contract</a>.</p>
+<h2 id="retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</h2>
+<pre><code class="language-bash"># Preview completed unkeyed runs last updated more than 30 days ago.
+retrace --db jobs.db prune --older-than 30 --limit 100
+# Apply after reviewing the preview. The selection is checked again under a write lock.
+retrace --db jobs.db prune --older-than 30 --limit 100 --apply
+</code></pre>
+<p>Cleanup defaults to <code>succeeded</code> and <code>cancelled</code> runs. Add <code>--include-failed</code> only when you
+no longer need to retry old failures. Pending, paused, waiting, running, and owned runs
+are always protected. Runs with submission keys are also always protected, including
+their results, so repeating a key continues to return the original run and conflicting
+work stays rejected.</p>
+<p><code>--older-than</code> is a finite positive age in <strong>days</strong>, measured from <code>updated_at</code> with a
+strict cutoff. The default batch is 100 runs; <code>--limit</code> accepts 1–500. Batches select the
+oldest updated runs first, then break ties by run ID. Repeat the command to process more
+batches. Each removed run loses its input, manifest, checkpoints, attempts, signals, and
+events together in one transaction. Removed runs cannot be inspected, resumed, or retried.
+Save a database backup or exported traces first if you need their history.</p>
+<p>Both modes print JSON containing <code>applied</code>, the cutoff timestamp, <code>run_ids</code>, record counts
+(<code>tasks</code>, <code>attempts</code>, <code>events</code>, <code>signals</code>), and <code>protected_keyed_runs</code>. The latter counts all
+otherwise age/status-eligible keyed runs, independently of the batch limit. A preview is a
+snapshot, not a reservation: another worker or operator can change eligibility before apply.
+Save the apply receipt if you need a record of cleanup.</p>
+<pre><code class="language-python">import time
+from retrace import Store
+
+cutoff = time.time() - 30 * 86400
+with Store(&quot;jobs.db&quot;, readonly=True) as store:
+    preview = store.prune_plan(cutoff, limit=100)
+with Store(&quot;jobs.db&quot;) as store:
+    receipt = store.prune(cutoff, limit=100)
+</code></pre>
+<p><code>Store.prune_plan(before, *, limit=100, include_failed=False)</code> works on read-only
+connections and returns an immutable <code>PrunePlan</code>. <code>Store.prune</code> uses the same arguments,
+reselects in its write transaction, and returns counts for the records it actually removed.
+Cleanup requires schema v4; migrate an older database by opening it for writing before
+previewing. No new schema migration is required for cleanup.</p>
+<p>Retained event IDs are never renumbered, and new events remain monotonic. SQLite reuses
+freed pages internally; this operation does not shrink the database file or run <code>VACUUM</code>.
+Queue policies and the durable scheduling cursor remain intact. Keyed-run expiration and
+partial event compaction are outside this cleanup contract.</p>
 <h2 id="cli">CLI</h2>
 <p>Global flags go <strong>before</strong> the subcommand:</p>
 <pre><code class="language-bash">retrace --db jobs.db --concurrency 8 --lease-ttl 30 run my_pipeline:workflow --input '{&quot;count&quot;:128}'
@@ -277,11 +317,12 @@ retrace --db jobs.db retry my_pipeline:workflow &lt;RUN_ID&gt; --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect &lt;RUN_ID&gt;
 retrace --db jobs.db events &lt;RUN_ID&gt; --after 42
+retrace --db jobs.db prune --older-than 30
 retrace --db jobs.db serve --port 7760
 </code></pre>
 <p>Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.</p>
-<p><code>runs</code>, <code>inspect</code>, <code>events</code>, and <code>retry --dry-run</code> open read-only connections and never create
+<p><code>runs</code>, <code>inspect</code>, <code>events</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
 in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.</p>
@@ -318,6 +359,7 @@ fetch cursors or discard nonmatching incoming events. For the complete journal, 
 <a class="toc-level-2" href="#local-worker-pool">Local worker pool</a>
 <a class="toc-level-2" href="#durable-run-cancellation">Durable run cancellation</a>
 <a class="toc-level-2" href="#explicit-retry-and-preview">Explicit retry and preview</a>
+<a class="toc-level-2" href="#retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</a>
 <a class="toc-level-2" href="#cli">CLI</a>
 <a class="toc-level-2" href="#inspector-api">Inspector API</a>
 <a class="toc-level-2" href="#journal-filtering-in-the-inspector">Journal filtering in the inspector</a></aside></div>

@@ -1,7 +1,15 @@
 """Retrace: crash-resumable Python workflows, without a service cluster."""
 
 from retrace.engine import Engine, RunResult
-from retrace.store import DefinitionMismatch, LeaseLost, QueueFull, RetryPlan, RunBusy, Store
+from retrace.store import (
+    DefinitionMismatch,
+    LeaseLost,
+    PrunePlan,
+    QueueFull,
+    RetryPlan,
+    RunBusy,
+    Store,
+)
 from retrace.worker import Worker
 from retrace.workflow import Context, RetryPolicy, Task, Workflow
 
@@ -10,6 +18,7 @@ __all__ = [
     "DefinitionMismatch",
     "Engine",
     "LeaseLost",
+    "PrunePlan",
     "QueueFull",
     "RetryPolicy",
     "RetryPlan",

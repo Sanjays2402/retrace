@@ -191,6 +191,18 @@ leaves an interrupted attempt; a crash after it preserves the selected deadline.
 subclasses. The attempt still increments the failure count and journals the error. A terminal
 failure blocks descendants while independent branches continue. Both classification and
 jitter settings are fingerprinted; omitted defaults keep preexisting definitions compatible.</p>
+<h2 id="whole-run-retention">Whole-run retention</h2>
+<p>Cleanup selects old, terminal, unkeyed runs under <code>BEGIN IMMEDIATE</code>. It deletes events,
+signals, attempts, tasks, and the run in foreign-key order inside the same transaction.
+Any failure rolls back the entire batch. Concurrent cleanup operators therefore cannot
+delete the same run twice, and a failed run reopened by manual retry before selection is
+protected by its new pending state. The read-only preview uses a consistent read transaction;
+apply selects again rather than trusting the preview.</p>
+<p>The journal is append-only while a run is retained. Cleanup removes a whole run's journal,
+never individual events from a retained run. It preserves SQLite's event sequence so remaining
+cursors keep their meaning and future IDs do not rewind. Submission-key runs are protected
+because their run rows also serve as durable deduplication records. See the
+<a href="../api/#retain-useful-runs-and-clean-up-old-history">cleanup API and CLI</a> for age and batching rules.</p>
 <h2 id="commit-boundary-and-side-effects">Commit boundary and side effects</h2>
 <p>The result, task state, attempt state, and corresponding event commit in one transaction.
 If any write fails, all of those changes roll back. A completed checkpoint is therefore either
@@ -315,6 +327,7 @@ to measure your own disk/workload rather than assuming a throughput guarantee.</
 <a href="https://docs.python.org/3/library/asyncio-task.html#task-cancellation">asyncio task cancellation</a>,
 and <a href="https://sqlite.org/wal.html">SQLite WAL</a>.</p></article><nav class="doc-next" aria-label="Adjacent guides"><a href="../choosing-retrace/"><small>← PREVIOUS</small><strong>Is Retrace a fit?</strong></a><a href="../recovery/"><small>NEXT →</small><strong>Recovery contract</strong></a></nav><a class="source-link" href="https://github.com/Sanjays2402/retrace/blob/main/docs/architecture.md">Edit source on GitHub ↗</a></main><aside class="doc-toc" aria-label="On this page"><span>ON THIS PAGE</span><a class="toc-level-2" href="#ownership-protocol">Ownership protocol</a>
 <a class="toc-level-2" href="#state-machines">State machines</a>
+<a class="toc-level-2" href="#whole-run-retention">Whole-run retention</a>
 <a class="toc-level-2" href="#commit-boundary-and-side-effects">Commit boundary and side effects</a>
 <a class="toc-level-2" href="#definition-and-data-contract">Definition and data contract</a>
 <a class="toc-level-2" href="#observation-and-security">Observation and security</a>

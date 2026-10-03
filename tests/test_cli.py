@@ -26,6 +26,28 @@ class CLITests(unittest.TestCase):
             code = main(["--db", self.db, *args])
         return code, out.getvalue(), err.getvalue()
 
+    def test_prune_defaults_to_preview_and_requires_explicit_apply(self):
+        self.assertEqual(self.invoke("prune", "--older-than", "30")[0], 2)
+        self.assertFalse(Path(self.db).exists())
+        self.assertEqual(self.invoke("submit", "examples.pipeline:workflow")[0], 0)
+        with Store(self.db) as store:
+            run_id = store.runs()[0]["id"]
+            store.cancel(run_id)
+            store.db.execute("UPDATE runs SET updated_at=0 WHERE id=?", (run_id,))
+        code, out, err = self.invoke("prune", "--older-than", "30")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["run_ids"], [run_id])
+        self.assertFalse(json.loads(out)["applied"])
+        self.assertEqual(len(json.loads(self.invoke("runs")[1])), 1)
+        code, out, err = self.invoke("prune", "--older-than", "30", "--apply")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(json.loads(out)["applied"])
+        self.assertEqual(json.loads(out)["run_ids"], [run_id])
+        self.assertEqual(json.loads(self.invoke("runs")[1]), [])
+        for days in ("0", "-1", "nan", "inf"):
+            self.assertEqual(self.invoke("prune", "--older-than", days)[0], 2)
+        self.assertEqual(self.invoke("prune", "--older-than", "30", "--limit", "501")[0], 2)
+
     def test_run_inspect_resume_list_and_events(self):
         code, out, err = self.invoke(
             "run", "examples.pipeline:workflow", "--input", '{"values":[2,4]}'

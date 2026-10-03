@@ -161,6 +161,21 @@ subclasses. The attempt still increments the failure count and journals the erro
 failure blocks descendants while independent branches continue. Both classification and
 jitter settings are fingerprinted; omitted defaults keep preexisting definitions compatible.
 
+## Whole-run retention
+
+Cleanup selects old, terminal, unkeyed runs under `BEGIN IMMEDIATE`. It deletes events,
+signals, attempts, tasks, and the run in foreign-key order inside the same transaction.
+Any failure rolls back the entire batch. Concurrent cleanup operators therefore cannot
+delete the same run twice, and a failed run reopened by manual retry before selection is
+protected by its new pending state. The read-only preview uses a consistent read transaction;
+apply selects again rather than trusting the preview.
+
+The journal is append-only while a run is retained. Cleanup removes a whole run's journal,
+never individual events from a retained run. It preserves SQLite's event sequence so remaining
+cursors keep their meaning and future IDs do not rewind. Submission-key runs are protected
+because their run rows also serve as durable deduplication records. See the
+[cleanup API and CLI](api.md#retain-useful-runs-and-clean-up-old-history) for age and batching rules.
+
 ## Commit boundary and side effects
 
 The result, task state, attempt state, and corresponding event commit in one transaction.

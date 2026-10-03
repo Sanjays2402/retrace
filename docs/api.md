@@ -224,6 +224,56 @@ all dependencies are already successful or included in the recovery plan. The ru
 failed if an unselected branch is still failed. No inputs, function versions, or successful
 outputs are changed. [Read the full recovery contract](recovery.md).
 
+## Retain useful runs and clean up old history
+
+```bash
+# Preview completed unkeyed runs last updated more than 30 days ago.
+retrace --db jobs.db prune --older-than 30 --limit 100
+# Apply after reviewing the preview. The selection is checked again under a write lock.
+retrace --db jobs.db prune --older-than 30 --limit 100 --apply
+```
+
+Cleanup defaults to `succeeded` and `cancelled` runs. Add `--include-failed` only when you
+no longer need to retry old failures. Pending, paused, waiting, running, and owned runs
+are always protected. Runs with submission keys are also always protected, including
+their results, so repeating a key continues to return the original run and conflicting
+work stays rejected.
+
+`--older-than` is a finite positive age in **days**, measured from `updated_at` with a
+strict cutoff. The default batch is 100 runs; `--limit` accepts 1–500. Batches select the
+oldest updated runs first, then break ties by run ID. Repeat the command to process more
+batches. Each removed run loses its input, manifest, checkpoints, attempts, signals, and
+events together in one transaction. Removed runs cannot be inspected, resumed, or retried.
+Save a database backup or exported traces first if you need their history.
+
+Both modes print JSON containing `applied`, the cutoff timestamp, `run_ids`, record counts
+(`tasks`, `attempts`, `events`, `signals`), and `protected_keyed_runs`. The latter counts all
+otherwise age/status-eligible keyed runs, independently of the batch limit. A preview is a
+snapshot, not a reservation: another worker or operator can change eligibility before apply.
+Save the apply receipt if you need a record of cleanup.
+
+```python
+import time
+from retrace import Store
+
+cutoff = time.time() - 30 * 86400
+with Store("jobs.db", readonly=True) as store:
+    preview = store.prune_plan(cutoff, limit=100)
+with Store("jobs.db") as store:
+    receipt = store.prune(cutoff, limit=100)
+```
+
+`Store.prune_plan(before, *, limit=100, include_failed=False)` works on read-only
+connections and returns an immutable `PrunePlan`. `Store.prune` uses the same arguments,
+reselects in its write transaction, and returns counts for the records it actually removed.
+Cleanup requires schema v4; migrate an older database by opening it for writing before
+previewing. No new schema migration is required for cleanup.
+
+Retained event IDs are never renumbered, and new events remain monotonic. SQLite reuses
+freed pages internally; this operation does not shrink the database file or run `VACUUM`.
+Queue policies and the durable scheduling cursor remain intact. Keyed-run expiration and
+partial event compaction are outside this cleanup contract.
+
 ## CLI
 
 Global flags go **before** the subcommand:
@@ -241,13 +291,14 @@ retrace --db jobs.db retry my_pipeline:workflow <RUN_ID> --task fetch
 retrace --db jobs.db runs
 retrace --db jobs.db inspect <RUN_ID>
 retrace --db jobs.db events <RUN_ID> --after 42
+retrace --db jobs.db prune --older-than 30
 retrace --db jobs.db serve --port 7760
 ```
 
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`runs`, `inspect`, `events`, and `retry --dry-run` open read-only connections and never create
+`runs`, `inspect`, `events`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
