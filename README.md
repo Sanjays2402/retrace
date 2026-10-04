@@ -26,6 +26,12 @@ with zero Python runtime dependencies. It is MIT licensed and is not yet publish
   <a href="https://sanjays2402.github.io/retrace/docs/choosing-retrace/">Is Retrace a fit?</a>
 </p>
 
+[![Retrace inspector showing a recovered workflow](docs/assets/feature-recovered.png)](https://sanjays2402.github.io/retrace/)
+
+**[Try the recovery playground →](https://sanjays2402.github.io/retrace/)** · [Install locally](#quickstart)
+
+In the browser playground, interrupt a run and resume it to see checkpoint reuse. For real SQLite persistence and worker recovery, follow the local quickstart below.
+
 ## Why Retrace
 
 - **Preserve completed work.** Resume after a worker crash without replaying successful steps.
