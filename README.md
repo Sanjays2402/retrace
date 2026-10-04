@@ -1,6 +1,6 @@
 <p align="center"><img src="src/retrace/static/mark.svg" width="64" alt="Retrace logo"></p>
 <h1 align="center">Retrace</h1>
-<p align="center"><strong>The process can stop. The progress stays.</strong><br>Crash-resumable Python workflows. One SQLite file. No services.</p>
+<p align="center"><strong>The process can stop. The progress stays.</strong><br>Crash-resumable Python workflows. One local SQLite database.</p>
 <p align="center">
   <a href="https://github.com/Sanjays2402/retrace/actions/workflows/ci.yml"><img src="https://github.com/Sanjays2402/retrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%E2%80%93%203.14-3776AB" alt="Python 3.11–3.14">
@@ -9,47 +9,36 @@
 </p>
 
 Retrace is an embedded workflow engine for async Python. It checkpoints successful steps,
-retries transient failures, and resumes interrupted dependency graphs. Use it for local data
-pipelines, document ingestion, batch API jobs, and multi-step tools that should survive a
-process restart.
+retries transient failures, and resumes interrupted dependency graphs. Run local data pipelines,
+document ingestion, batch API jobs, or approval workflows with durable progress and an inspectable
+execution history.
 
-**Early alpha.** The failure semantics are explicit and tested; the API may change before 1.0.
+The local inspector shows what completed, what failed, and what needs recovery. Workflow health
+analytics help you measure reliability; configurable checks turn those measurements into JSON
+results and exit codes for your own monitoring scripts.
 
-**Try it now:** [Interactive recovery demo](https://sanjays2402.github.io/retrace/) — no install or account.
+**Early alpha:** the API may change before 1.0. Retrace supports a single-machine worker pool,
+with zero Python runtime dependencies. It is MIT licensed and is not yet published to PyPI.
 
-**New here?** [Five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/) ·
-[Real CSV and HTTP examples](https://sanjays2402.github.io/retrace/docs/examples/) ·
-[Is Retrace a fit?](https://sanjays2402.github.io/retrace/docs/choosing-retrace/)
+<p align="center">
+  <a href="https://sanjays2402.github.io/retrace/">Try the interactive demo</a> ·
+  <a href="https://sanjays2402.github.io/retrace/docs/">Read the documentation</a> ·
+  <a href="https://sanjays2402.github.io/retrace/docs/choosing-retrace/">Is Retrace a fit?</a>
+</p>
 
-### Pick your view
+## Why Retrace
 
-The [interactive recovery playground](https://sanjays2402.github.io/retrace/) has four accent colors and light and dark modes. Select a preview to see it at full size.
+- **Preserve completed work.** Resume after a worker crash without replaying successful steps.
+- **Handle unreliable dependencies.** Persist retry deadlines, classify permanent errors, and
+  retry selected failed branches while preserving checkpoints and history.
+- **Keep local operations small.** Share one SQLite file across worker processes; use durable
+  submission keys, fair scheduling, queue limits, cancellation, and graceful drain.
+- **Diagnose and measure.** Inspect attempts and worker handoffs, export reports and traces,
+  and compare failure rates, completion latency, recovered runs, and expired leases.
 
-| Green · dark | Red · light |
-| :---: | :---: |
-| [![Retrace recovery playground in shining green dark mode](docs/assets/theme-green.png)](docs/assets/theme-green.png) | [![Retrace recovery playground in red light mode](docs/assets/theme-red.png)](docs/assets/theme-red.png) |
-| Yellow · light | Blue · dark |
-| [![Retrace recovery playground in yellow light mode](docs/assets/theme-yellow.png)](docs/assets/theme-yellow.png) | [![Retrace recovery playground in blue dark mode](docs/assets/theme-blue.png)](docs/assets/theme-blue.png) |
+## Quickstart
 
-The browser playground simulates a worker crash and recovery; it runs no real jobs. After installation, `retrace serve` opens the local inspector for real SQLite checkpoints and events.
-
-### See the workflow
-
-In the [recovery lab](https://sanjays2402.github.io/retrace/#lab), the worker stops after two checkpoints. A new worker reuses them, reruns the interrupted step, and commits the remaining work.
-
-| Worker interrupted · green | Run recovered · blue |
-| :---: | :---: |
-| [![Workflow interrupted with two committed checkpoints and no output from the interrupted step](docs/assets/feature-interrupted.png)](docs/assets/feature-interrupted.png) | [![Workflow succeeded after a second worker reused two checkpoints and committed all four steps](docs/assets/feature-recovered.png)](docs/assets/feature-recovered.png) |
-
-The [signals lab](https://sanjays2402.github.io/retrace/#signals) shows an approval gate waiting without holding a worker or spending an attempt budget.
-
-[![Signal-gated release workflow waiting for approval, with no worker held](docs/assets/feature-signal-wait.png)](docs/assets/feature-signal-wait.png)
-
-These screenshots show browser simulations. The Python engine and local inspector persist actual runs to SQLite.
-
-## Try it in a minute
-
-Requires **Python 3.11+**. Install from the repository; this project is not yet published to PyPI.
+Requires **Python 3.11+**. Install from source:
 
 ```bash
 git clone https://github.com/Sanjays2402/retrace.git
@@ -61,160 +50,30 @@ retrace demo
 retrace serve
 ```
 
-Open **http://127.0.0.1:7760**. In another terminal, run `retrace demo` again to watch the graph
-update. The eight-step document-indexing simulation deliberately fails its first embedding
-attempt, then retries and commits 512 simulated vectors. It makes no external API calls.
+Open **http://127.0.0.1:7760**. In another activated terminal, run `retrace demo` again to watch
+new runs appear. This eight-step document-indexing simulation deliberately fails its first
+embedding attempt, then retries and commits 512 simulated vectors. It makes no external API calls;
+its checkpoints and history are persisted to a real SQLite database.
 
-## The interesting part: kill it
+### Try crash recovery
 
 ```bash
 retrace --lease-ttl 1.5 demo --crash
-# Deliberately exits with code 86 during embedding. Copy the printed run ID.
+# Exits with code 86 during embedding. Copy the printed run ID.
 # Wait two seconds for the dead worker's lease to expire, then:
 retrace resume retrace.demo:workflow <RUN_ID>
 retrace inspect <RUN_ID>
 ```
 
-`ingest`, `validate`, `chunk`, and other completed steps are reused. The interrupted embedding
-attempt stays visible in the timeline; a new worker completes the run. The integration suite
-also kills a real child process without cleanup, resumes it in a different process, verifies
-that a completed step ran once, and checks SQLite integrity.
+Completed steps are reused. The interrupted attempt remains in the timeline, and a new worker
+finishes the run. Follow the [five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/)
+for the complete sequence.
 
-## Pause for an external decision
+## Define a workflow in ordinary Python
 
-Declare `Task("publish", fn, wait_for="decision")` to park a step until a durable signal
-arrives. Retrace releases the run lease while it waits, so the worker can process other runs.
-The decision may arrive before or after the step reaches its gate. On execution, the task
-receives its JSON payload as `ctx.signal`.
-
-```bash
-retrace --db jobs.db run examples.approval:workflow --input '{"request":"release-42"}'
-# Copy the run ID printed on stderr; the result says "waiting".
-retrace --db jobs.db signal RUN_ID decision --payload '{"approved":true}'
-retrace --db jobs.db resume examples.approval:workflow RUN_ID
-```
-
-For queued work, a polling worker resumes the run automatically after signal delivery.
-See the [API guide](docs/api.md#durable-signals) for duplicate and cancellation behavior.
-
-## Queue runs across local worker processes
-
-Submit runs without starting them, then run one or more workers against the same **local**
-SQLite file. Each process loads the same workflow definition and atomically claims an eligible
-run. A crashed worker's run becomes eligible after its lease expires.
-
-```bash
-retrace --db jobs.db submit examples.pipeline:workflow --input '{"values":[3,7,11]}'
-retrace --db jobs.db worker examples.pipeline:workflow --max-runs 2
-# In another terminal, start another worker with the same command.
-# For batch jobs or scripts, add --once to drain the available queue and exit.
-```
-
-If producers retry requests after a timeout, use a submission key to prevent duplicate runs.
-You can also delay a run without keeping a producer process alive:
-
-```bash
-retrace --db jobs.db submit examples.pipeline:workflow \
-  --input '{"values":[3,7,11]}' --key orders-2026-09-26 --delay 60
-```
-
-The first submission owns that key and schedule. Repeating the same key and input returns the
-same run ID, even after completion; using the key for different work fails. A worker claims the
-run only after the delay. Keys are unique per database and stored as SHA-256 hashes. Back up
-your SQLite file before upgrading: opening an older database for writing migrates its schema.
-
-Workers only claim runs matching their workflow fingerprint. The journal records each new
-ownership epoch, and a stale worker cannot commit after takeover. `--max-runs` limits parallel
-runs per process; global `--concurrency` limits ready tasks **within each run**. This is a
-single-machine worker pool, not multi-host scheduling. Side effects remain at least once;
-pass `ctx.idempotency_key` to systems that support deduplication.
-
-For mixed workloads, give a worker multiple definitions. Claims alternate between eligible
-definitions using a durable round-robin cursor, then take the oldest run within each one.
-Queue limits are persisted in SQLite and apply across local workers and producers:
-
-```bash
-retrace --db jobs.db queue --configure examples.pipeline:workflow \
-  --max-active 2 --max-queued 100
-retrace --db jobs.db worker examples.pipeline:workflow examples.approval:workflow --max-runs 4
-retrace --db jobs.db queue
-```
-
-`--max-active` bounds live leases for that exact workflow definition, so a busy pipeline
-cannot fill all slots in a shared worker. `--max-queued` rejects new submissions when the
-pending/paused queue is full; retrying an existing submission key still returns its original
-run. The queue snapshot reports ready, delayed, paused, waiting, active, and recoverable runs,
-plus the age of the oldest eligible run. Policies are per fingerprint; changing the workflow
-definition requires configuring the new fingerprint. The limit applies to worker claims;
-explicit `resume` remains an operator override.
-
-For rolling worker restarts, send **SIGTERM** to a worker process. It stops claiming new runs,
-lets its current runs finish for up to 30 seconds, then pauses any still active work and
-releases its leases. Another worker can claim those paused runs immediately, without waiting
-for lease expiry. Set `--drain-timeout 10` to choose a different grace period; `0` pauses
-immediately. This is cooperative: a task that blocks the event loop or suppresses cancellation
-can delay shutdown. A hard kill still uses the normal expired-lease recovery path.
-
-## Cancel a queued or running run
-
-```bash
-retrace --db jobs.db cancel <RUN_ID>
-```
-
-Cancellation is durable and idempotent. It stops a queued run from being claimed, or revokes
-an active worker's lease immediately. Unfinished steps become `cancelled`; an active attempt
-is recorded as `interrupted`, while completed checkpoints and the event history remain
-available for inspection. The worker receives coroutine cancellation and its later database
-writes are fenced out. External side effects may already have happened, so tasks still need
-idempotency keys and should cooperate with asyncio cancellation. A cancelled run is terminal;
-create a new run to execute the workflow again.
-
-## Recover a failed branch
-
-Fix the external cause of a failure, then preview and retry only the affected work:
-
-```bash
-retrace retry pipeline:workflow <RUN_ID> --task publish --dry-run
-retrace retry pipeline:workflow <RUN_ID> --task publish
-```
-
-Omit `--task` to retry all failed steps, or repeat it to select several. Successful steps stay
-committed; eligible blocked descendants are reopened. Shared downstream steps remain blocked
-while any dependency is still failed. Attempt numbers, idempotency keys, and history are preserved.
-See [the recovery guide](docs/recovery.md) for a runnable example and the exact failure-budget rules.
-
-## Back up a live database
-
-```bash
-mkdir backups
-retrace --db jobs.db backup backups/before-cleanup.db
-retrace --db backups/before-cleanup.db runs
-```
-
-Backups include committed WAL data, checkpoints, signals, submission keys, and event history.
-Retrace checks the copy and publishes one standalone database file without overwriting an
-existing destination. Use the backup as a separate database path to inspect or recover runs.
-See [backup and restore](https://sanjays2402.github.io/retrace/docs/api/#back-up-and-restore-a-database)
-for active-lease handling and the external side-effect replay window.
-
-## Clean up old history
-
-```bash
-retrace --db jobs.db prune --older-than 30             # preview only
-retrace --db jobs.db prune --older-than 30 --apply      # remove the selected batch
-```
-
-Cleanup removes old succeeded and cancelled runs with their checkpoints, attempts, signals,
-and events in one transaction. It protects unfinished work and runs with submission keys.
-Failed runs require `--include-failed`. Each batch defaults to 100 runs; retained event IDs
-stay unchanged. Save a backup or exported traces if you need the removed history.
-See [the retention guide](https://sanjays2402.github.io/retrace/docs/api/#retain-useful-runs-and-clean-up-old-history)
-for the Python API, batching rules, and deduplication guarantees.
-
-## A workflow is ordinary Python
+Save this as `pipeline.py`:
 
 ```python
-# pipeline.py
 from retrace import Context, Task, Workflow
 
 
@@ -239,96 +98,151 @@ workflow = Workflow(
 
 ```bash
 retrace run pipeline:workflow --input '{"values": [3, 7, 11]}'
-retrace runs                    # latest 100 runs, newest first
-retrace runs --limit 5          # restrict the listing
-retrace runs --status failed --status waiting # find runs needing attention
-retrace runs --workflow ingestion --limit 25 # filter by workflow name
-retrace runs --before <LAST_RUN_ID> # page through older history
-retrace report <RUN_ID> > run.report.json # diagnostics without application payloads
-retrace health --hours 168      # workflow reliability and completion latency
-retrace health --max-failure-rate 0.05 --max-expired-leases 0 # operational checks
-retrace events <RUN_ID> > events.jsonl
 ```
 
-Or embed it directly:
+The final checkpoint contains `{"count": 3, "total": 21}`. You can also embed `Engine` and `Store`
+in your application. See the [Python API guide](https://sanjays2402.github.io/retrace/docs/api/)
+and [runnable CSV, HTTP, retry, and approval examples](https://sanjays2402.github.io/retrace/docs/examples/).
 
-```python
-import asyncio
-from retrace import Engine, Store
-from pipeline import workflow
+## Queue work across local processes
 
-
-async def main():
-    with Store("retrace.db") as store:
-        result = await Engine(store, concurrency=4).run(workflow, {"values": [3, 7, 11]})
-        print(result.outputs["summarize"])  # {"count": 3, "total": 21}
-        # After a restart: await Engine(store).resume(workflow, saved_run_id)
-
-
-asyncio.run(main())
+```bash
+retrace --db jobs.db submit examples.pipeline:workflow \
+  --input '{"values":[3,7,11]}' --key batch-42
+retrace --db jobs.db queue --configure examples.pipeline:workflow \
+  --max-active 2 --max-queued 100
+retrace --db jobs.db worker examples.pipeline:workflow --max-runs 2
+# Start another worker in a second terminal against the same local database.
 ```
 
-## What is built in
+Workers atomically claim eligible runs matching their workflow fingerprint. A crashed worker's
+run becomes eligible after its lease expires; stale workers cannot commit checkpoints after
+ownership changes. Submission keys deduplicate identical requests, including after completion.
+Use `--delay 60` for durable delayed dispatch or `worker --once` to drain available work and exit.
 
-| Capability | Implementation |
-| --- | --- |
-| Durable checkpoints | SQLite WAL, `synchronous=FULL`; state and event commit together |
-| Crash recovery | Expired run leases are reclaimed; successful steps are reused |
-| Local worker pool | Transactional queue claims across processes, bounded runs per worker, automatic expired-lease recovery |
-| Graceful worker drain | SIGTERM stops claims, completes in-flight runs within a grace period, then pauses and releases unfinished work |
-| Producer-safe submission | Idempotent keys and delayed dispatch survive process restarts |
-| Stale-worker protection | Every write checks owner, monotonically increasing epoch, and lease expiry |
-| Dependency-aware scheduling | Validated DAG, bounded async concurrency, failed descendants blocked |
-| Selective recovery | Retry chosen failed branches with a dry-run plan; preserve checkpoints and audit history |
-| Durable retries | Capped exponential backoff, optional full jitter, and permanent-error classification; retry deadlines survive restarts |
-| Durable signals | One-shot JSON messages can arrive before or after a task waits; waiting runs release their worker lease |
-| Timeouts and cancellation | Cooperative task deadlines; graceful interruption pauses a run, explicit cancellation revokes its lease and ends it |
-| Inspectable execution | Step outputs, complete attempt history, cursor-based JSONL event export |
-| Diagnostic reports | Download a coherent run snapshot with checkpoints, retry history, and recent events; application payloads are omitted by default |
-| Workflow health | Compare failure rates, p50/p95 completion time, recovered runs, failed attempts, and expired leases across workflow definitions |
-| Operational checks | Set per-definition failure-rate, latency, and expired-lease budgets; JSON decisions and exit codes distinguish breaches from insufficient data |
-| Run history search | Combine status and workflow filters, with stable pagination through older runs via Python, CLI, and inspector API |
-| Run retention | Preview and atomically remove old terminal runs; unfinished work and submission keys stay protected |
-| Online backups | Checked standalone SQLite snapshots including committed WAL data, with no-overwrite publication |
-| Local dashboard | Live polling, graph, attempt and worker-epoch timelines, journal filters, payload search, and JSONL download |
-| Explicit compatibility | Workflow manifests are fingerprinted; changed definitions cannot reuse checkpoints |
-| Small operational footprint | Python standard library at runtime; no broker, container, or server cluster |
+Workers can load multiple definitions. A durable round-robin cursor alternates between eligible
+definitions, and persisted queue limits apply across local producers and workers. SIGTERM stops
+new claims, drains active work for a configurable grace period, and pauses unfinished work for
+handoff. See [worker and queue semantics](https://sanjays2402.github.io/retrace/docs/api/#local-worker-pool).
+
+## Measure reliability and check operational thresholds
+
+The **Workflow health** panel compares definitions over 24 hours, 7 days, or 30 days. It reports:
+
+- Failed runs as a fraction of succeeded plus failed runs.
+- p50/p95 completion elapsed time, including queueing, signal waits, and recovery.
+- Failed and interrupted attempts, succeeded runs that recovered after failure, and expired leases.
+
+```bash
+retrace --db jobs.db health --hours 168 > weekly-health.json
+retrace --db jobs.db health --hours 168 \
+  --max-failure-rate 0.05 --max-p95-seconds 60 \
+  --max-expired-leases 0 --min-completed 20 > health-check.json
+```
+
+Thresholds apply per workflow definition. Checks return `0` for pass, `1` for a known breach,
+`2` for invalid options or an infrastructure error, and `3` for insufficient data without a known
+breach. Rate and latency checks require enough completed runs; empty or truncated cohorts cannot
+silently pass. A fresh demo database may legitimately return `3`.
+
+These are creation-time cohorts, using current run states and retained history. The latest 10,000
+matching runs are sampled, with truncation recorded explicitly. They are operational measurements,
+not an SLA guarantee. Read the [metric definitions](https://sanjays2402.github.io/retrace/docs/api/#measure-workflow-health)
+and [threshold guide](https://sanjays2402.github.io/retrace/docs/api/#check-operational-thresholds).
+
+## Investigate a run
+
+The read-only local inspector combines a dependency graph, attempt timeline, worker epochs,
+checkpoint outputs, and a searchable event journal. Expand the live list up to 1,000 runs,
+filter for work needing attention, or save a permalink to a selected run and step.
+
+```bash
+retrace --db jobs.db runs --status failed --status waiting
+retrace --db jobs.db runs --workflow analytics --limit 25
+retrace --db jobs.db runs --before <LAST_RUN_ID>
+retrace --db jobs.db report <RUN_ID> > run.report.json
+retrace --db jobs.db trace <RUN_ID> > run.trace.json
+retrace --db jobs.db events <RUN_ID> > events.jsonl
+```
+
+**Download report** captures checkpoint metadata, complete attempt history, signal names, and
+recent events in one coherent snapshot. Inputs, outputs, signal/event payloads, and exception
+messages are omitted by default. Names and identifiers remain visible; review them before sharing.
+Payloads require an explicit `report --include-payloads` opt-in in the CLI.
+
+**Download trace** exports recorded attempts for [Perfetto](https://ui.perfetto.dev), with one lane
+per task. The journal supports combined filters, payload search, and filtered JSONL downloads.
+See [diagnostic reports](https://sanjays2402.github.io/retrace/docs/api/#export-a-diagnostic-report).
+
+## Recovery and maintenance
+
+| Operation | Command or API | Behavior |
+| --- | --- | --- |
+| Wait for a decision | `Task(..., wait_for="decision")` and `retrace signal RUN_ID decision --payload '{"approved":true}'` | Durable one-shot signal; waiting releases the worker lease |
+| Preview a failed-branch retry | `retrace retry pipeline:workflow RUN_ID --task summarize --dry-run` | Shows affected steps without resetting checkpoints |
+| Retry a failed branch | `retrace retry pipeline:workflow RUN_ID --task summarize` | Preserves successful steps and attempt history |
+| Cancel work | `retrace cancel RUN_ID` | Durable cancellation revokes ownership; completed checkpoints remain |
+| Back up live data | `retrace backup backups/snapshot.db` | Checked standalone snapshot including committed WAL data; never overwrites a destination |
+| Preview cleanup | `retrace prune --older-than 30` | Protects unfinished work and submission keys; deletion requires `--apply` |
+
+Commands in the table use `retrace.db` by default; put `--db jobs.db` **before** the subcommand
+to select another database. Create the backup directory first. `resume` continues interrupted work;
+`retry` explicitly resets failed steps after the external cause has been fixed.
+
+Read [durable signals](https://sanjays2402.github.io/retrace/docs/api/#durable-signals),
+[recovery](https://sanjays2402.github.io/retrace/docs/recovery/),
+[backup and restore](https://sanjays2402.github.io/retrace/docs/api/#back-up-and-restore-a-database),
+and [retention](https://sanjays2402.github.io/retrace/docs/api/#retain-useful-runs-and-clean-up-old-history)
+for the detailed contracts.
 
 ## Guarantees and boundaries
 
-- **Task execution is at least once.** A crash can happen after an external API accepts a request
-  and before its result is committed. Use `ctx.idempotency_key` with downstream systems that
-  support deduplication. Worker fencing protects Retrace's database, not external side effects.
-- **One worker owns a run; its ready tasks execute concurrently.** Several local processes
-  can poll and claim different runs from the same SQLite file. The queue is polled, and
-  workers must load the matching workflow definition. Graceful drain supports local rolling
-  restarts; it does not turn the SQLite queue into a multi-host service.
-- **Completed outputs are immutable checkpoints.** Retrace resumes from them; it does not
-  replay successful functions. After fixing an external failure, explicitly retry failed steps
-  with `retrace retry`. Use `--dry-run` to preview the affected steps; `resume` never resets failures.
-- **Bump `Workflow.version` when implementation behavior changes.** The fingerprint covers
-  graph structure, function identity, retry policy, and timeouts, not function source or dependencies.
-- **Tasks must cooperate with asyncio.** Blocking CPU work delays heartbeats. Timeouts and
-  cancellation cannot forcibly terminate code that suppresses cancellation. Explicit run
-  cancellation fences database writes but cannot undo external effects.
-- **Small JSON values, local disk.** Each input/output is limited to 1 MiB. Store large artifacts
-  separately. Network filesystems, distributed clocks, encrypted storage, and multi-tenant
-  hosting are outside the supported scope.
-- **The inspector is local and read-only.** It binds to loopback, rejects foreign Host/Origin
-  headers, and serves no mutation routes. It displays stored inputs, errors, and outputs; avoid
-  persisting secrets. Its graph is designed for small to medium workflows.
+- **Task execution is at least once.** A crash can happen after an external request succeeds
+  and before its checkpoint commits. Use `ctx.idempotency_key` with downstream systems that
+  support deduplication. Fencing protects Retrace's database, not external side effects.
+- **Single machine, local disk.** Multiple local processes can claim separate runs from one
+  database. Multi-host scheduling, network filesystems, and multi-tenant hosting are outside
+  the supported scope.
+- **Completed outputs are immutable checkpoints.** Successful functions are not replayed
+  during resume. Workflow fingerprints prevent changed definitions from reusing checkpoints.
+  Bump `Workflow.version` when implementation behavior changes: fingerprints do not hash function
+  source or installed dependencies.
+- **Tasks must cooperate with asyncio.** Blocking work delays heartbeats. Timeouts and
+  cancellation cannot forcibly terminate code that suppresses cancellation.
+- **Small JSON payloads.** Inputs and outputs are limited to 1 MiB each; keep large artifacts
+  outside the database. Writable opens migrate supported older database schemas; back up first.
+- **Local inspection.** The inspector binds to loopback and rejects foreign Host/Origin headers.
+  It has no mutation routes and displays stored application data. Avoid persisting secrets.
 
-See [architecture and failure semantics](docs/architecture.md), [the API guide](docs/api.md),
-and [security guidance](SECURITY.md).
+See [architecture and failure semantics](https://sanjays2402.github.io/retrace/docs/architecture/)
+and [security guidance](https://sanjays2402.github.io/retrace/docs/security/).
 
-## Interactive recovery lab
+## Explore the browser demo
 
-The [live browser playground](https://sanjays2402.github.io/retrace/) demonstrates a crash and recovery with step playback,
-checkpoint inspection, attempt history, journal filtering, and sample JSON exports.
-It runs entirely in the browser with synthetic data; the real Python engine runs locally.
-[Explore the playground source and development guide](playground).
+The [public recovery playground](https://sanjays2402.github.io/retrace/) needs no account or install.
+It demonstrates checkpoint reuse, worker crashes, signal gates, journal search, and theme switching.
+It uses **synthetic browser data**; the Python engine and local inspector persist actual runs to SQLite.
 
-## Development
+| Worker interrupted · green | Run recovered · blue |
+| :---: | :---: |
+| [![Workflow interrupted with committed checkpoints](docs/assets/feature-interrupted.png)](docs/assets/feature-interrupted.png) | [![Workflow recovered after checkpoint reuse](docs/assets/feature-recovered.png)](docs/assets/feature-recovered.png) |
+
+<details>
+<summary>More screenshots: signal gates and four color themes</summary>
+
+[![Signal-gated workflow waiting for approval without holding a worker](docs/assets/feature-signal-wait.png)](docs/assets/feature-signal-wait.png)
+
+| Green · dark | Red · light |
+| :---: | :---: |
+| [![Green dark theme](docs/assets/theme-green.png)](docs/assets/theme-green.png) | [![Red light theme](docs/assets/theme-red.png)](docs/assets/theme-red.png) |
+| Yellow · light | Blue · dark |
+| [![Yellow light theme](docs/assets/theme-yellow.png)](docs/assets/theme-yellow.png) | [![Blue dark theme](docs/assets/theme-blue.png)](docs/assets/theme-blue.png) |
+
+</details>
+
+[Playground source and development guide](playground).
+
+## Development and validation
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -340,46 +254,30 @@ python -m build
 python scripts/smoke_wheel.py
 ```
 
-The Python suite includes process-level producer and worker contention, 25
-reproducible generated DAGs, transactional rollback injection, stale-worker fencing, persistent
-retry deadlines, retention rollback and cursor checks, HTTP security checks, and a real process-kill/restart test.
-CI enforces 95% overall and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS and Windows.
-Fourteen Playwright browser tests cover real inspector interactions and failure states.
-The packaging job installs the built wheel into a clean environment outside the source tree.
+For the inspector browser suite:
 
-A [reproducible local benchmark](docs/benchmark.md) records scheduler/checkpoint overhead and its limits.
+```bash
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run check:ui
+npm run test:ui
+```
+
+The current suite has **140 Python tests and 22 browser tests**, with **96% Python coverage**.
+CI enforces a 95% coverage floor and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS
+and Windows. Tests cover process crashes, producer/worker contention, generated DAGs, stale-worker
+fencing, rollback, persistent retry deadlines, retention, exports, health checks, and browser
+interactions. Packaging CI installs the wheel in a clean environment outside the source tree.
+
+The [reproducible benchmark](https://sanjays2402.github.io/retrace/docs/benchmark/)
+records scheduler and checkpoint overhead, including the limits of its measurements.
 
 ## Contribute
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). The most useful contributions make execution
-semantics easier to verify, improve operational visibility, or remove a concrete limitation.
-[The roadmap](docs/roadmap.md) includes scoped starter tasks and design work. Bug reports should
-include a minimal workflow and the relevant journal events with sensitive data removed.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[roadmap](https://sanjays2402.github.io/retrace/docs/roadmap/). Contributions that improve verified
+recovery semantics, operational visibility, or a concrete workflow limitation are welcome.
+Include a minimal workflow and a diagnostic report with sensitive identifiers reviewed when
+reporting a bug. Full payload reports should not be shared without reviewing their contents.
 
 MIT licensed. Built by [Sanjay Santhanam](https://github.com/Sanjays2402).
-
-### Performance trace export and graph navigation
-
-Use **Download trace** in the inspector to save the selected run, or export every recorded attempt from the CLI, including failures and recovery history:
-
-```sh
-retrace --db retrace.db trace RUN_ID > run.trace.json
-```
-
-Open the JSON in [Perfetto](https://ui.perfetto.dev) using **Open trace file**.
-The exporter uses the [Chrome JSON trace format](https://perfetto.dev/docs/getting-started/other-formats),
-with one lane per task and microsecond timestamps relative to run creation.
-Unfinished attempts appear as instant events because their end time is unknown.
-Inputs, outputs, and exception messages are excluded; workflow and task names remain.
-Export uses a consistent read-only snapshot and never imports workflow code.
-
-The local inspector now includes **Zoom in**, **Zoom out**, **Fit graph**, and
-**Reset zoom**. Fit follows viewport changes, and live polling preserves your zoom.
-
-Use **Show 100 more** to expand the live run list up to 1,000 runs. Search and Attention
-filters cover the loaded history; **Latest 100** resets the list while keeping your
-selected run open. For older history, use the CLI's `runs --before` cursor.
-
-Inspector URLs now preserve the selected run, step, and execution view. Use **Permalink**
-to copy a link, bookmark an investigation, or navigate with browser Back and Forward.
-Links refer to the database served by that inspector; localhost links require the same local server.
