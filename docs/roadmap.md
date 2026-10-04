@@ -4,6 +4,9 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Live queue monitoring in the inspector, including admission and active limits,
+  signal waits, and expired leases eligible for recovery.
+
 - Configurable operational health thresholds, with per-definition decisions and distinct
   pass, breach, and insufficient-data outcomes for scripts.
 

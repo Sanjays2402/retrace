@@ -517,3 +517,66 @@ test("health failures leave run inspection working and recover on refresh", asyn
   await page.locator("#refresh").click();
   await expect(page.locator("#health-rows tr")).toHaveCount(5);
 });
+
+test("queue overview reads real signal waits and unlimited capacity", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const row = page.locator("#queue-rows tr").filter({ hasText: "waiting-run" });
+  await expect(row.locator("td").nth(4)).toHaveText("1");
+  await expect(row.locator("td").nth(5)).toHaveText("0 / Unlimited");
+  await expect(row.locator("td").nth(7)).toHaveText("0 / Unlimited");
+  await expect(page.locator("#queue-scope")).toContainText("entire database");
+});
+
+test("queue overview flags capacity and recovery and escapes workflow names", async ({
+  page,
+}) => {
+  await page.route("**/api/queue", (route) =>
+    route.fulfill({
+      json: {
+        queues: [
+          {
+            name: '<img src=x onerror="window.pwned=1">',
+            fingerprint: "abcdef1234567890",
+            ready: 2,
+            delayed: 1,
+            paused: 1,
+            waiting: 3,
+            active: 2,
+            recoverable: 1,
+            max_active: 2,
+            max_queued: 4,
+            oldest_ready_age_seconds: 75,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  const row = page.locator("#queue-rows tr");
+  await expect(row.locator("td").nth(5)).toHaveText("2 / 2 · Full");
+  await expect(row.locator("td").nth(7)).toHaveText("4 / 4 · Full");
+  await expect(row.locator("td").nth(6)).toHaveClass("health-alert");
+  await expect(row.locator("td").nth(8)).not.toHaveText("—");
+  await expect(row.locator("img")).toHaveCount(0);
+  expect(await page.evaluate(() => window.pwned)).toBeUndefined();
+});
+
+test("queue outage preserves inspection and refresh recovers to an empty queue", async ({
+  page,
+}) => {
+  await page.route("**/api/queue", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.locator("#queue-scope")).toContainText("unavailable");
+  await expect(page.locator(".node")).toHaveCount(8);
+  await page.unroute("**/api/queue");
+  await page.route("**/api/queue", (route) =>
+    route.fulfill({ json: { queues: [] } }),
+  );
+  await page.locator("#refresh").click();
+  await expect(page.locator("#queue-rows")).toContainText(
+    "No workflow definitions",
+  );
+  await expect(page.locator("#queue-scope")).toContainText("0 definitions");
+});

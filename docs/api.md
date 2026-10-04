@@ -548,6 +548,16 @@ At the 1,000-run cap, use `retrace runs --before <LAST_RUN_ID>` to browse older 
 The expanded list remains a live view: new submissions can move the oldest entries out
 of the loaded window.
 
+The **Queue overview** panel refreshes every 10 seconds across the entire database,
+independent of run-history filters and health lookback. Each row represents an exact workflow
+fingerprint and shows ready, delayed, paused, signal-waiting, active, and recoverable runs.
+Active and queued capacity display configured limits and a **Full** indicator. Queued capacity
+counts pending (including delayed) and paused runs; waiting runs consume neither active nor
+queued capacity. Recoverable runs have expired leases and can be reclaimed by workers.
+Oldest eligible age includes ready, paused, and expired-lease runs; delayed and signal-waiting
+runs are excluded. An unavailable queue snapshot is marked as potentially stale while normal
+run inspection remains usable. Empty configured policies are shown even without any runs.
+
 The local server starts only if the database exists. It serves:
 
 - `GET /api/runs`: latest 100 run summaries. Optional `limit`, repeated `status`,
@@ -555,6 +565,7 @@ The local server starts only if the database exists. It serves:
   e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
 - `GET /api/runs/{id}/report`: a diagnostic report without application payloads or errors.
+- `GET /api/queue`: a coherent read-only snapshot of all definition queues and limits.
 - `GET /api/health?hours=24`: workflow reliability metrics for a creation-time cohort.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 

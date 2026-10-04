@@ -104,6 +104,42 @@
           and unfinished runs are excluded from failure rates.
         </p>
       </section>
+      <section class="panel health-panel" aria-labelledby="queue-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="queue-title">Queue overview</h2>
+            <p class="muted">
+              Live capacity and recovery across all stored definitions
+            </p>
+          </div>
+        </div>
+        <p id="queue-scope" class="muted health-note" role="status">
+          Loading queues…
+        </p>
+        <div class="health-scroll">
+          <table aria-label="Workflow queues">
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Ready</th>
+                <th>Delayed</th>
+                <th>Paused</th>
+                <th>Waiting</th>
+                <th>Active / limit</th>
+                <th>Recoverable</th>
+                <th>Queued / limit</th>
+                <th>Oldest eligible</th>
+              </tr>
+            </thead>
+            <tbody id="queue-rows"></tbody>
+          </table>
+        </div>
+        <p class="muted health-note">
+          Queued capacity counts pending and paused runs. Signal waits release
+          active slots. Recoverable runs have expired leases; workers reclaim
+          them automatically. Limits apply per definition.
+        </p>
+      </section>
       <section class="execution-layout">
         <aside class="runs-panel panel">
           <div class="panel-heading">

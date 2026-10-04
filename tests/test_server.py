@@ -5,6 +5,7 @@ import http.client
 import json
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -50,6 +51,45 @@ class ServerTests(unittest.TestCase):
             self.assertTrue(body)
             self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
             self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
+
+    def test_queue_snapshot_includes_limits_and_recovery(self):
+        workflow = Workflow("queue-test", (Task("step", value),))
+        with Store(self.path) as store:
+            store.configure_queue(workflow, max_active=2, max_queued=10)
+            for status in ("pending", "paused", "waiting", "running"):
+                run_id = store.create(workflow, {})
+                store.db.execute(
+                    "UPDATE runs SET status=?, lease_until=0 WHERE id=?", (status, run_id)
+                )
+            delayed = store.create(workflow, {}, ready_at=time.time() + 3600)
+            before = store.queue_stats()
+        status, headers, body = self.request("/api/queue")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        queues = json.loads(body)["queues"]
+        item = next(row for row in queues if row["name"] == "queue-test")
+        for field in ("ready", "delayed", "paused", "waiting", "recoverable"):
+            self.assertEqual(item[field], 1)
+        self.assertEqual(item["active"], 0)
+        self.assertEqual(item["max_active"], 2)
+        self.assertEqual(item["max_queued"], 10)
+        self.assertGreaterEqual(item["oldest_ready_age_seconds"], 0)
+        with Store(self.path, readonly=True) as store:
+            self.assertEqual(store.run(delayed)["status"], "pending")
+            self.assertEqual(len(store.queue_stats()), len(before))
+        for headers in ({"Host": "evil.example"}, {"Origin": "https://evil.example"}):
+            self.assertEqual(self.request("/api/queue", headers=headers)[0], 403)
+
+    def test_queue_policy_without_runs_is_visible(self):
+        workflow = Workflow("unused", (Task("step", value),))
+        with Store(self.path) as store:
+            store.configure_queue(workflow, max_active=1, max_queued=None)
+        _, _, body = self.request("/api/queue")
+        item = next(row for row in json.loads(body)["queues"] if row["name"] == "unused")
+        self.assertEqual(item["ready"], 0)
+        self.assertEqual(item["max_active"], 1)
+        self.assertIsNone(item["max_queued"])
+        self.assertIsNone(item["oldest_ready_age_seconds"])
 
     def test_workflow_health_route_and_lookback_validation(self):
         status, _, body = self.request("/api/health?hours=24")

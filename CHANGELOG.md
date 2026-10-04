@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a live inspector queue overview with per-definition backlog, capacity limits,
+  expired-lease recovery counts, oldest eligible waits, and a read-only queue API.
+
 - Add configurable operational health checks for failure rate, p95 completion time, and expired leases.
 - Return per-definition observed values and decisions, with exit codes for breach and insufficient data.
 - Require minimum completion samples for rate/latency checks; prevent empty or truncated cohorts from passing.

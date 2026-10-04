@@ -129,7 +129,8 @@ Use `--delay 60` for durable delayed dispatch or `worker --once` to drain availa
 Workers can load multiple definitions. A durable round-robin cursor alternates between eligible
 definitions, and persisted queue limits apply across local producers and workers. SIGTERM stops
 new claims, drains active work for a configurable grace period, and pauses unfinished work for
-handoff. See [worker and queue semantics](https://sanjays2402.github.io/retrace/docs/api/#local-worker-pool).
+handoff. The inspector’s **Queue overview** shows backlog, capacity limits, signal waits,
+and expired leases ready for recovery across all definitions. See [worker and queue semantics](https://sanjays2402.github.io/retrace/docs/api/#local-worker-pool).
 
 ## Measure reliability and check operational thresholds
 
@@ -269,7 +270,7 @@ npm run check:ui
 npm run test:ui
 ```
 
-The current suite has **140 Python tests and 22 browser tests**, with **96% Python coverage**.
+The current suite has **142 Python tests and 25 browser tests**, with **96% Python coverage**.
 CI enforces a 95% coverage floor and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS
 and Windows. Tests cover process crashes, producer/worker contention, generated DAGs, stale-worker
 fencing, rollback, persistent retry deadlines, retention, exports, health checks, and browser

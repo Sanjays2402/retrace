@@ -540,6 +540,15 @@ History changes made during live polling are fetched as soon as the active refre
 At the 1,000-run cap, use <code>retrace runs --before &lt;LAST_RUN_ID&gt;</code> to browse older history.
 The expanded list remains a live view: new submissions can move the oldest entries out
 of the loaded window.</p>
+<p>The <strong>Queue overview</strong> panel refreshes every 10 seconds across the entire database,
+independent of run-history filters and health lookback. Each row represents an exact workflow
+fingerprint and shows ready, delayed, paused, signal-waiting, active, and recoverable runs.
+Active and queued capacity display configured limits and a <strong>Full</strong> indicator. Queued capacity
+counts pending (including delayed) and paused runs; waiting runs consume neither active nor
+queued capacity. Recoverable runs have expired leases and can be reclaimed by workers.
+Oldest eligible age includes ready, paused, and expired-lease runs; delayed and signal-waiting
+runs are excluded. An unavailable queue snapshot is marked as potentially stale while normal
+run inspection remains usable. Empty configured policies are shown even without any runs.</p>
 <p>The local server starts only if the database exists. It serves:</p>
 <ul>
 <li><code>GET /api/runs</code>: latest 100 run summaries. Optional <code>limit</code>, repeated <code>status</code>,
@@ -547,6 +556,7 @@ of the loaded window.</p>
   e.g. <code>/api/runs?status=failed&amp;status=waiting&amp;workflow=ingestion&amp;limit=25</code>.</li>
 <li><code>GET /api/runs/{id}</code>: run manifest/input, task checkpoints, and attempt history.</li>
 <li><code>GET /api/runs/{id}/report</code>: a diagnostic report without application payloads or errors.</li>
+<li><code>GET /api/queue</code>: a coherent read-only snapshot of all definition queues and limits.</li>
 <li><code>GET /api/health?hours=24</code>: workflow reliability metrics for a creation-time cohort.</li>
 <li><code>GET /api/runs/{id}/events?after={cursor}</code>: up to 500 events and next cursor.</li>
 </ul>

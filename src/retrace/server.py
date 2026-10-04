@@ -90,7 +90,9 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
                         return
                     # A read transaction gives the UI a coherent multi-table snapshot.
                     store.db.execute("BEGIN")
-                    if parts == ["api", "runs"]:
+                    if parts == ["api", "queue"]:
+                        self.send_json(200, {"queues": store.queue_stats()})
+                    elif parts == ["api", "runs"]:
                         query = parse_qs(url.query, keep_blank_values=True)
                         self.send_json(
                             200,

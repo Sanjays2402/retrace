@@ -619,3 +619,38 @@ $("health-window").addEventListener("change", refreshHealth);
 $("refresh").addEventListener("click", refreshHealth);
 setInterval(refreshHealth, 10000);
 refreshHealth();
+
+let queueBusy = false;
+async function refreshQueue() {
+  if (queueBusy) return;
+  queueBusy = true;
+  try {
+    const snapshot = await api("/api/queue");
+    $("queue-scope").textContent =
+      `${snapshot.queues.length} definitions · entire database · updated ${new Date().toLocaleTimeString()} · refreshes every 10 seconds`;
+    $("queue-rows").innerHTML = snapshot.queues.length
+      ? snapshot.queues
+          .map((item) => {
+            const queued = item.ready + item.delayed + item.paused;
+            const activeFull =
+              item.max_active !== null && item.active >= item.max_active;
+            const queuedFull =
+              item.max_queued !== null && queued >= item.max_queued;
+            const age =
+              item.oldest_ready_age_seconds === null
+                ? "—"
+                : duration(item.oldest_ready_age_seconds);
+            return `<tr><td>${escapeHTML(item.name)}<small title="${escapeHTML(item.fingerprint)}">${escapeHTML(item.fingerprint.slice(0, 12))}</small></td><td>${item.ready}</td><td>${item.delayed}</td><td>${item.paused}</td><td>${item.waiting}</td><td class="${activeFull ? "health-alert" : ""}">${item.active} / ${item.max_active ?? "Unlimited"}${activeFull ? " · Full" : ""}</td><td class="${item.recoverable ? "health-alert" : ""}">${item.recoverable}</td><td class="${queuedFull ? "health-alert" : ""}">${queued} / ${item.max_queued ?? "Unlimited"}${queuedFull ? " · Full" : ""}</td><td>${escapeHTML(age)}</td></tr>`;
+          })
+          .join("")
+      : '<tr><td colspan="9">No workflow definitions or queue policies yet.</td></tr>';
+  } catch {
+    $("queue-scope").textContent =
+      "Queue overview unavailable · values may be stale · retrying";
+  } finally {
+    queueBusy = false;
+  }
+}
+$("refresh").addEventListener("click", refreshQueue);
+setInterval(refreshQueue, 10000);
+refreshQueue();
