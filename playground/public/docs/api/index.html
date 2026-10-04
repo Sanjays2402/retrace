@@ -517,7 +517,7 @@ retrace --db jobs.db serve --port 7760
 </code></pre>
 <p>Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.</p>
-<p><code>health</code>, <code>runs</code>, <code>inspect</code>, <code>events</code>, <code>report</code>, <code>backup</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
+<p><code>metrics</code>, <code>health</code>, <code>runs</code>, <code>inspect</code>, <code>events</code>, <code>report</code>, <code>backup</code>, <code>prune</code> without <code>--apply</code>, and <code>retry --dry-run</code> open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. <code>events</code> emits JSONL
 in ascending event-ID order, fetching every page. The <code>--after</code> cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.</p>
@@ -530,6 +530,82 @@ Ctrl-C pauses active work; a hard kill leaves a lease that must expire before re
 <code>worker --once</code> prints a JSON array of
 completed runs; a continuous worker emits one JSON object per completed run. Individual task
 failures appear in each result and do not stop the worker process.</p>
+<h2 id="prometheus-monitoring">Prometheus monitoring</h2>
+<p>The inspector serves <code>GET /metrics</code> in the <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">Prometheus text exposition format</a>
+(version 0.0.4). Export the same snapshot from Python or the CLI without starting a server:</p>
+<pre><code class="language-python">from retrace import Store
+from retrace.metrics import prometheus_metrics
+
+with Store(&quot;jobs.db&quot;, readonly=True) as store:
+    text = prometheus_metrics(store)
+</code></pre>
+<pre><code class="language-bash">retrace --db jobs.db metrics &gt; queue.prom
+retrace --db jobs.db serve --port 7760
+</code></pre>
+<p>A Prometheus instance running on the same host can scrape the loopback inspector:</p>
+<pre><code class="language-yaml">scrape_configs:
+  - job_name: retrace
+    scrape_interval: 15s
+    static_configs:
+      - targets: [&quot;127.0.0.1:7760&quot;]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>retrace_queue_definitions</code></td>
+<td>none</td>
+<td>Stored definitions or configured queue policies</td>
+</tr>
+<tr>
+<td><code>retrace_queue_runs</code></td>
+<td><code>workflow</code>, <code>fingerprint</code>, <code>state</code></td>
+<td>Current ready, delayed, paused, waiting, active, or recoverable run count</td>
+</tr>
+<tr>
+<td><code>retrace_queue_limit</code></td>
+<td><code>workflow</code>, <code>fingerprint</code>, <code>resource</code></td>
+<td>Configured <code>active</code> or <code>queued</code> capacity; unlimited limits have no sample</td>
+</tr>
+<tr>
+<td><code>retrace_queue_oldest_eligible_seconds</code></td>
+<td><code>workflow</code>, <code>fingerprint</code></td>
+<td>Oldest ready, paused, or expired-lease wait; absent if no eligible run</td>
+</tr>
+</tbody>
+</table>
+<p>All metrics are <strong>gauges</strong>, collected from one read transaction over the whole database.
+They describe current state, not lifetime execution counters. Terminal runs are excluded from
+queue counts. Delayed and signal-waiting runs are excluded from eligible age; queued capacity
+counts ready, delayed, and paused runs. A configured policy with no runs emits zero state counts.
+The CLI does not create missing databases or import workflow code.</p>
+<p>Example alert rules detect recoverable leases and excessive eligible waits:</p>
+<pre><code class="language-yaml">groups:
+  - name: retrace-queues
+    rules:
+      - alert: RetraceExpiredLease
+        expr: retrace_queue_runs{state=&quot;recoverable&quot;} &gt; 0
+        for: 2m
+      - alert: RetraceQueueStalled
+        expr: retrace_queue_oldest_eligible_seconds &gt; 300
+        for: 5m
+</code></pre>
+<p>Choose thresholds to match expected workload latency. A long eligible wait can be caused by
+active limits, absent workers, or recovery; delayed dispatch and signal waits are different states.
+Use Prometheus's <code>up{job="retrace"}</code> to detect scrape failures; a missing series is not proof of
+an empty queue. An empty database emits <code>retrace_queue_definitions 0</code> and metric metadata.</p>
+<p>Labels contain workflow names and exact fingerprints, never run IDs, inputs, outputs, exception
+messages, or worker owners. Different definitions of the same name remain separate series.
+Cardinality grows with stored definitions and policies; review retention and policy creation
+when generating definitions dynamically. The endpoint preserves loopback-only binding and
+Host/Origin validation. A Prometheus container's own loopback does not reach a host inspector;
+use a same-host collector or an explicit, secured forwarding arrangement.</p>
 <h2 id="inspector-api">Inspector API</h2>
 <p>The inspector starts with the latest 100 runs. <strong>Show 100 more</strong> expands the list by 100
 at a time, up to 1,000, while keeping polling active for the entire loaded list. Search,
@@ -556,11 +632,12 @@ run inspection remains usable. Empty configured policies are shown even without 
   e.g. <code>/api/runs?status=failed&amp;status=waiting&amp;workflow=ingestion&amp;limit=25</code>.</li>
 <li><code>GET /api/runs/{id}</code>: run manifest/input, task checkpoints, and attempt history.</li>
 <li><code>GET /api/runs/{id}/report</code>: a diagnostic report without application payloads or errors.</li>
+<li><code>GET /metrics</code>: Prometheus text queue gauges (version 0.0.4), instead of JSON.</li>
 <li><code>GET /api/queue</code>: a coherent read-only snapshot of all definition queues and limits.</li>
 <li><code>GET /api/health?hours=24</code>: workflow reliability metrics for a creation-time cohort.</li>
 <li><code>GET /api/runs/{id}/events?after={cursor}</code>: up to 500 events and next cursor.</li>
 </ul>
-<p>All responses are JSON with <code>Cache-Control: no-store</code>. Read-only requests open their own database
+<p>API responses are JSON; <code>/metrics</code> uses Prometheus text. All responses use <code>Cache-Control: no-store</code>. Read-only requests open their own database
 connection. Unknown resources return <code>404</code>, invalid cursor values <code>400</code>, forbidden Host/Origin
 headers <code>403</code>, and database access errors <code>503</code>. There are no write routes, authentication tokens,
 or remote bind options. See <a href="../security/">SECURITY.md</a> before using real data.</p>
@@ -585,6 +662,7 @@ fetch cursors or discard nonmatching incoming events. For the complete journal, 
 <a class="toc-level-2" href="#back-up-and-restore-a-database">Back up and restore a database</a>
 <a class="toc-level-2" href="#retain-useful-runs-and-clean-up-old-history">Retain useful runs and clean up old history</a>
 <a class="toc-level-2" href="#cli">CLI</a>
+<a class="toc-level-2" href="#prometheus-monitoring">Prometheus monitoring</a>
 <a class="toc-level-2" href="#inspector-api">Inspector API</a>
 <a class="toc-level-2" href="#journal-filtering-in-the-inspector">Journal filtering in the inspector</a></aside></div>
       <footer class="docs-footer"><span>Retrace · Early alpha · MIT</span><a href="https://github.com/Sanjays2402/retrace/issues/new/choose">Get help ↗</a></footer>

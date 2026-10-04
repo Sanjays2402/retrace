@@ -80,6 +80,18 @@ class ServerTests(unittest.TestCase):
         for headers in ({"Host": "evil.example"}, {"Origin": "https://evil.example"}):
             self.assertEqual(self.request("/api/queue", headers=headers)[0], 403)
 
+    def test_prometheus_endpoint_format_and_security(self):
+        status, headers, body = self.request("/metrics")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/plain; version=0.0.4; charset=utf-8")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertIn(b"retrace_queue_definitions 1\n", body)
+        self.assertIn(b'state="ready"} 0\n', body)
+        self.assertNotIn(self.run_id.encode(), body)
+        self.assertNotIn(b"<script>", body)
+        for headers in ({"Host": "evil.example"}, {"Origin": "https://evil.example"}):
+            self.assertEqual(self.request("/metrics", headers=headers)[0], 403)
+
     def test_queue_policy_without_runs_is_visible(self):
         workflow = Workflow("unused", (Task("step", value),))
         with Store(self.path) as store:

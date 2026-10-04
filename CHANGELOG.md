@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add dependency-free Prometheus queue gauges through `/metrics`, the CLI, and Python.
+- Export coherent state counts, configured limits, and oldest eligible waits without run payloads.
+- Document same-host scraping, alert rules, absent samples, and definition-level cardinality.
+
 - Add a live inspector queue overview with per-definition backlog, capacity limits,
   expired-lease recovery counts, oldest eligible waits, and a read-only queue API.
 

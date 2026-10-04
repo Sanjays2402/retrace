@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from retrace.health import workflow_health
+from retrace.metrics import CONTENT_TYPE, prometheus_metrics
 from retrace.report import export_report
 from retrace.store import Store
 from retrace.trace import export_trace
@@ -72,6 +73,9 @@ def make_server(db_path: str | Path, port: int = 7760) -> ThreadingHTTPServer:
             parts = url.path.strip("/").split("/")
             try:
                 with Store(path, readonly=True) as store:
+                    if parts == ["metrics"]:
+                        self.send_body(200, prometheus_metrics(store).encode(), CONTENT_TYPE)
+                        return
                     if parts == ["api", "health"]:
                         hours = float(
                             parse_qs(url.query, keep_blank_values=True).get("hours", ["24"])[0]

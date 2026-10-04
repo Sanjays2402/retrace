@@ -157,6 +157,17 @@ matching runs are sampled, with truncation recorded explicitly. They are operati
 not an SLA guarantee. Read the [metric definitions](https://sanjays2402.github.io/retrace/docs/api/#measure-workflow-health)
 and [threshold guide](https://sanjays2402.github.io/retrace/docs/api/#check-operational-thresholds).
 
+## Monitor queues with Prometheus
+
+Scrape `http://127.0.0.1:7760/metrics` while the local inspector is running, or export a snapshot:
+
+```bash
+retrace --db jobs.db metrics > queue.prom
+```
+
+Graph queue states, configured capacity, and oldest eligible waits per definition. These read-only
+gauges omit application payloads and run IDs. See the [scrape configuration and alert examples](https://sanjays2402.github.io/retrace/docs/api/#prometheus-monitoring).
+
 ## Investigate a run
 
 The read-only local inspector combines a dependency graph, attempt timeline, worker epochs,
@@ -270,7 +281,7 @@ npm run check:ui
 npm run test:ui
 ```
 
-The current suite has **142 Python tests and 25 browser tests**, with **96% Python coverage**.
+The current suite has **147 Python tests and 25 browser tests**, with **96% Python coverage**.
 CI enforces a 95% coverage floor and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS
 and Windows. Tests cover process crashes, producer/worker contention, generated DAGs, stale-worker
 fencing, rollback, persistent retry deadlines, retention, exports, health checks, and browser

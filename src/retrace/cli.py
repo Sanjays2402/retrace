@@ -67,6 +67,7 @@ def parser() -> argparse.ArgumentParser:
     worker.add_argument("--max-runs", type=int, default=1, help="parallel runs in this process")
     worker.add_argument("--poll-interval", type=float, default=1.0, help="idle poll seconds")
     worker.add_argument("--once", action="store_true", help="drain available runs and exit")
+    commands.add_parser("metrics", help="export read-only Prometheus queue gauges")
     queue = commands.add_parser("queue", help="show queue depth, wait age, and policies")
     queue.add_argument(
         "--configure", metavar="WORKFLOW", help="persist limits for MODULE:ATTRIBUTE"
@@ -170,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
             serve(args.db, args.port)
             return 0
         readonly = (
-            args.command in ("runs", "inspect", "events", "trace", "report", "backup", "health")
+            args.command
+            in ("runs", "inspect", "events", "trace", "report", "backup", "health", "metrics")
             or (args.command == "queue" and args.configure is None)
             or (args.command == "retry" and args.dry_run)
             or (args.command == "prune" and not args.apply)
@@ -188,6 +190,10 @@ def main(argv: list[str] | None = None) -> int:
                         indent=2,
                     )
                 )
+            elif args.command == "metrics":
+                from retrace.metrics import prometheus_metrics
+
+                print(prometheus_metrics(store), end="")
             elif args.command == "health":
                 from retrace.health import evaluate_health, workflow_health
 

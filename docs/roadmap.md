@@ -4,6 +4,8 @@ This is a direction, not a delivery promise. Retrace focuses on inspectable loca
 
 ## Implemented since v0.1
 
+- Prometheus queue monitoring with a read-only endpoint, CLI export, and alert examples.
+
 - Live queue monitoring in the inspector, including admission and active limits,
   signal waits, and expired leases eligible for recovery.
 

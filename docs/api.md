@@ -521,7 +521,7 @@ retrace --db jobs.db serve --port 7760
 Workflow imports are trusted Python and execute module-level code. The current working directory
 is added temporarily to the import path so project-local definitions are importable.
 
-`health`, `runs`, `inspect`, `events`, `report`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
+`metrics`, `health`, `runs`, `inspect`, `events`, `report`, `backup`, `prune` without `--apply`, and `retry --dry-run` open read-only connections and never create
 a missing database. Run IDs and progress guidance go to stderr; structured results go to stdout. `events` emits JSONL
 in ascending event-ID order, fetching every page. The `--after` cursor is exclusive; IDs are
 monotonic across the database and may have gaps within a run.
@@ -535,6 +535,73 @@ Ctrl-C pauses active work; a hard kill leaves a lease that must expire before re
 `worker --once` prints a JSON array of
 completed runs; a continuous worker emits one JSON object per completed run. Individual task
 failures appear in each result and do not stop the worker process.
+
+## Prometheus monitoring
+
+The inspector serves `GET /metrics` in the [Prometheus text exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/)
+(version 0.0.4). Export the same snapshot from Python or the CLI without starting a server:
+
+```python
+from retrace import Store
+from retrace.metrics import prometheus_metrics
+
+with Store("jobs.db", readonly=True) as store:
+    text = prometheus_metrics(store)
+```
+
+```bash
+retrace --db jobs.db metrics > queue.prom
+retrace --db jobs.db serve --port 7760
+```
+
+A Prometheus instance running on the same host can scrape the loopback inspector:
+
+```yaml
+scrape_configs:
+  - job_name: retrace
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["127.0.0.1:7760"]
+```
+
+| Metric | Labels | Meaning |
+| --- | --- | --- |
+| `retrace_queue_definitions` | none | Stored definitions or configured queue policies |
+| `retrace_queue_runs` | `workflow`, `fingerprint`, `state` | Current ready, delayed, paused, waiting, active, or recoverable run count |
+| `retrace_queue_limit` | `workflow`, `fingerprint`, `resource` | Configured `active` or `queued` capacity; unlimited limits have no sample |
+| `retrace_queue_oldest_eligible_seconds` | `workflow`, `fingerprint` | Oldest ready, paused, or expired-lease wait; absent if no eligible run |
+
+All metrics are **gauges**, collected from one read transaction over the whole database.
+They describe current state, not lifetime execution counters. Terminal runs are excluded from
+queue counts. Delayed and signal-waiting runs are excluded from eligible age; queued capacity
+counts ready, delayed, and paused runs. A configured policy with no runs emits zero state counts.
+The CLI does not create missing databases or import workflow code.
+
+Example alert rules detect recoverable leases and excessive eligible waits:
+
+```yaml
+groups:
+  - name: retrace-queues
+    rules:
+      - alert: RetraceExpiredLease
+        expr: retrace_queue_runs{state="recoverable"} > 0
+        for: 2m
+      - alert: RetraceQueueStalled
+        expr: retrace_queue_oldest_eligible_seconds > 300
+        for: 5m
+```
+
+Choose thresholds to match expected workload latency. A long eligible wait can be caused by
+active limits, absent workers, or recovery; delayed dispatch and signal waits are different states.
+Use Prometheus's `up{job="retrace"}` to detect scrape failures; a missing series is not proof of
+an empty queue. An empty database emits `retrace_queue_definitions 0` and metric metadata.
+
+Labels contain workflow names and exact fingerprints, never run IDs, inputs, outputs, exception
+messages, or worker owners. Different definitions of the same name remain separate series.
+Cardinality grows with stored definitions and policies; review retention and policy creation
+when generating definitions dynamically. The endpoint preserves loopback-only binding and
+Host/Origin validation. A Prometheus container's own loopback does not reach a host inspector;
+use a same-host collector or an explicit, secured forwarding arrangement.
 
 ## Inspector API
 
@@ -565,11 +632,12 @@ The local server starts only if the database exists. It serves:
   e.g. `/api/runs?status=failed&status=waiting&workflow=ingestion&limit=25`.
 - `GET /api/runs/{id}`: run manifest/input, task checkpoints, and attempt history.
 - `GET /api/runs/{id}/report`: a diagnostic report without application payloads or errors.
+- `GET /metrics`: Prometheus text queue gauges (version 0.0.4), instead of JSON.
 - `GET /api/queue`: a coherent read-only snapshot of all definition queues and limits.
 - `GET /api/health?hours=24`: workflow reliability metrics for a creation-time cohort.
 - `GET /api/runs/{id}/events?after={cursor}`: up to 500 events and next cursor.
 
-All responses are JSON with `Cache-Control: no-store`. Read-only requests open their own database
+API responses are JSON; `/metrics` uses Prometheus text. All responses use `Cache-Control: no-store`. Read-only requests open their own database
 connection. Unknown resources return `404`, invalid cursor values `400`, forbidden Host/Origin
 headers `403`, and database access errors `503`. There are no write routes, authentication tokens,
 or remote bind options. See [SECURITY.md](../SECURITY.md) before using real data.
