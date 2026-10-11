@@ -1,24 +1,25 @@
 <p align="center"><img src="src/retrace/static/mark.svg" width="64" alt="Retrace logo"></p>
 <h1 align="center">Retrace</h1>
-<p align="center"><strong>The process can stop. The progress stays.</strong><br>Crash-resumable Python workflows. One local SQLite database.</p>
+<p align="center"><strong>The process can stop. The progress stays.</strong><br>Crash-resumable Python workflows. One SQLite file. Zero runtime dependencies.</p>
 <p align="center">
   <a href="https://github.com/Sanjays2402/retrace/actions/workflows/ci.yml"><img src="https://github.com/Sanjays2402/retrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/python-3.11%20%E2%80%93%203.14-3776AB" alt="Python 3.11–3.14">
-  <img src="https://img.shields.io/badge/runtime_dependencies-0-50733c" alt="Zero runtime dependencies">
+  <img src="https://img.shields.io/badge/python-3.11%20%E2%80%93%203.14-3776AB" alt="Python 3.11 to 3.14">
+  <img src="https://img.shields.io/badge/runtime%20dependencies-0-50733c" alt="Zero runtime dependencies">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-50733c" alt="MIT license"></a>
 </p>
 
-Retrace is an embedded workflow engine for async Python. It checkpoints successful steps,
-retries transient failures, and resumes interrupted dependency graphs. Run local data pipelines,
-document ingestion, batch API jobs, or approval workflows with durable progress and an inspectable
-execution history.
+Retrace is a durable execution engine for async Python. Every completed step is checkpointed to
+SQLite as it finishes, so an interrupted workflow resumes from where it stopped instead of
+replaying finished work. No brokers, no daemons, no cluster: one local database shared by any
+number of worker processes on the machine.
 
-The local inspector shows what completed, what failed, and what needs recovery. Workflow health
-analytics help you measure reliability; configurable checks turn those measurements into JSON
-results and exit codes for your own monitoring scripts.
+Long-running pipelines die for boring reasons. Containers get OOM-killed, laptops sleep, SSH
+sessions drop, a flaky embedding API times out at 3 AM. Retrace treats that as the normal case:
+retry transient failures with persisted deadlines, resume crashed workers after their lease
+expires, and inspect exactly what completed, what failed, and what is waiting.
 
-**Early alpha:** the API may change before 1.0. Retrace supports a single-machine worker pool,
-with zero Python runtime dependencies. It is MIT licensed and is not yet published to PyPI.
+**Early alpha:** the API may change before 1.0. Retrace supports a single-machine worker pool
+with zero Python runtime dependencies. It is MIT licensed and not yet published to PyPI.
 
 <p align="center">
   <a href="https://sanjays2402.github.io/retrace/">Try the interactive demo</a> ·
@@ -30,21 +31,35 @@ with zero Python runtime dependencies. It is MIT licensed and is not yet publish
 
 **[Try the recovery playground →](https://sanjays2402.github.io/retrace/)** · [Install locally](#quickstart)
 
-In the browser playground, interrupt a run and resume it to see checkpoint reuse. For real SQLite persistence and worker recovery, follow the local quickstart below.
+## Features
 
-## Why Retrace
-
-- **Preserve completed work.** Resume after a worker crash without replaying successful steps.
-- **Handle unreliable dependencies.** Persist retry deadlines, classify permanent errors, and
-  retry selected failed branches while preserving checkpoints and history.
-- **Keep local operations small.** Share one SQLite file across worker processes; use durable
-  submission keys, fair scheduling, queue limits, cancellation, and graceful drain.
-- **Diagnose and measure.** Inspect attempts and worker handoffs, export reports and traces,
-  and compare failure rates, completion latency, recovered runs, and expired leases.
+- **Durable checkpoints.** Each step's output is committed to SQLite before the next step runs.
+  Resume reuses them; completed steps are never replayed.
+- **DAG pipelines in plain Python.** Async task functions, declared dependencies, cycle
+  detection, topological execution.
+- **Retries that survive crashes.** Backoff deadlines and attempt history are persisted, so a
+  retry schedule continues after the process dies. Mark errors non-retryable to fail fast.
+- **Crash recovery by lease.** Workers hold a heartbeat lease on their runs. A dead worker's
+  lease expires and another worker picks the run up; stale workers are fenced and cannot
+  commit after ownership moves.
+- **Durable signals.** Tasks can wait for an external decision without holding a worker;
+  `retrace signal` delivers a one-shot payload that wakes them.
+- **Local multi-process queue.** Any number of workers share one database file, claim runs
+  atomically, and drain gracefully on SIGTERM. Idempotent submission keys deduplicate
+  retries, and delayed dispatch schedules work for later.
+- **Versioned definitions.** A workflow fingerprint prevents changed code from reusing stale
+  checkpoints. Bump `Workflow.version` when behavior changes.
+- **Read-only inspector.** Dependency graph, attempt timeline, worker epochs, checkpoint
+  outputs, and a searchable event journal on loopback, with no mutation routes.
+- **Operational visibility.** Failure rates, p50/p95 latency, recovered runs, and expired
+  leases over 24h/7d/30d, threshold checks with scriptable exit codes, and Prometheus gauges
+  for queue depth and wait age.
+- **Safe maintenance.** Checked database backups, retention previews that protect unfinished
+  work, and diagnostic reports and Perfetto traces for postmortems.
 
 ## Quickstart
 
-Requires **Python 3.11+**. Install from source:
+Requires **Python 3.11+**:
 
 ```bash
 git clone https://github.com/Sanjays2402/retrace.git
@@ -57,46 +72,54 @@ retrace serve
 ```
 
 Open **http://127.0.0.1:7760**. In another activated terminal, run `retrace demo` again to watch
-new runs appear. This eight-step document-indexing simulation deliberately fails its first
-embedding attempt, then retries and commits 512 simulated vectors. It makes no external API calls;
-its checkpoints and history are persisted to a real SQLite database.
+new runs appear. The demo is an eight-step document-indexing simulation: its first embedding
+attempt fails against a simulated rate limit, then retries and commits 512 vectors. No external
+API calls; checkpoints and history persist to a real SQLite database.
 
-### Try crash recovery
+### Watch a crash recover
 
 ```bash
 retrace --lease-ttl 1.5 demo --crash
-# Exits with code 86 during embedding. Copy the printed run ID.
+# Hard-exits with code 86 mid-embedding. Copy the printed run ID.
 # Wait two seconds for the dead worker's lease to expire, then:
 retrace resume retrace.demo:workflow <RUN_ID>
 retrace inspect <RUN_ID>
 ```
 
-Completed steps are reused. The interrupted attempt remains in the timeline, and a new worker
-finishes the run. Follow the [five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/)
-for the complete sequence.
+Everything before the crash is reused. The interrupted attempt stays in the timeline, and the
+run finishes. Follow the
+[five-minute recovery walkthrough](https://sanjays2402.github.io/retrace/docs/getting-started/)
+for the full sequence.
 
 ## Define a workflow in ordinary Python
 
 Save this as `pipeline.py`:
 
 ```python
-from retrace import Context, Task, Workflow
+from retrace import Context, RetryPolicy, Task, Workflow
 
 
 async def extract(ctx: Context):
     return ctx.input["values"]
 
 
+async def fetch_price(ctx: Context):
+    # Flaky upstream: retries with backoff, deadline persisted across crashes.
+    return await call_exchange_api(ctx)
+
+
 async def summarize(ctx: Context):
-    values = ctx.dependencies["extract"]
-    return {"total": sum(values), "count": len(values)}
+    prices = ctx.dependencies["fetch_price"]
+    return {"count": len(prices), "total": sum(prices)}
 
 
 workflow = Workflow(
     "analytics",
     (
         Task("extract", extract),
-        Task("summarize", summarize, needs=("extract",)),
+        Task("fetch_price", fetch_price, needs=("extract",),
+             retry=RetryPolicy(max_attempts=5, initial_delay=1.0, max_delay=60.0)),
+        Task("summarize", summarize, needs=("fetch_price",)),
     ),
     version="1",
 )
@@ -106,9 +129,13 @@ workflow = Workflow(
 retrace run pipeline:workflow --input '{"values": [3, 7, 11]}'
 ```
 
-The final checkpoint contains `{"count": 3, "total": 21}`. You can also embed `Engine` and `Store`
-in your application. See the [Python API guide](https://sanjays2402.github.io/retrace/docs/api/)
-and [runnable CSV, HTTP, retry, and approval examples](https://sanjays2402.github.io/retrace/docs/examples/).
+Kill the process mid-run with `kill -9` if you like. `retrace resume pipeline:workflow <RUN_ID>`
+picks it up where it stopped. A `wait_for="decision"` task pauses for a human without holding a
+worker; `retrace signal <RUN_ID> decision --payload '{"approved": true}'` wakes it. See the
+[Python API guide](https://sanjays2402.github.io/retrace/docs/api/) and
+[runnable examples](https://sanjays2402.github.io/retrace/docs/examples/) for CSV, HTTP, retry,
+approval, and recovery patterns. You can also embed `Engine` and `Store` directly in your
+application.
 
 ## Queue work across local processes
 
@@ -121,52 +148,12 @@ retrace --db jobs.db worker examples.pipeline:workflow --max-runs 2
 # Start another worker in a second terminal against the same local database.
 ```
 
-Workers atomically claim eligible runs matching their workflow fingerprint. A crashed worker's
-run becomes eligible after its lease expires; stale workers cannot commit checkpoints after
-ownership changes. Submission keys deduplicate identical requests, including after completion.
-Use `--delay 60` for durable delayed dispatch or `worker --once` to drain available work and exit.
-
-Workers can load multiple definitions. A durable round-robin cursor alternates between eligible
-definitions, and persisted queue limits apply across local producers and workers. SIGTERM stops
-new claims, drains active work for a configurable grace period, and pauses unfinished work for
-handoff. The inspector’s **Queue overview** shows backlog, capacity limits, signal waits,
-and expired leases ready for recovery across all definitions. See [worker and queue semantics](https://sanjays2402.github.io/retrace/docs/api/#local-worker-pool).
-
-## Measure reliability and check operational thresholds
-
-The **Workflow health** panel compares definitions over 24 hours, 7 days, or 30 days. It reports:
-
-- Failed runs as a fraction of succeeded plus failed runs.
-- p50/p95 completion elapsed time, including queueing, signal waits, and recovery.
-- Failed and interrupted attempts, succeeded runs that recovered after failure, and expired leases.
-
-```bash
-retrace --db jobs.db health --hours 168 > weekly-health.json
-retrace --db jobs.db health --hours 168 \
-  --max-failure-rate 0.05 --max-p95-seconds 60 \
-  --max-expired-leases 0 --min-completed 20 > health-check.json
-```
-
-Thresholds apply per workflow definition. Checks return `0` for pass, `1` for a known breach,
-`2` for invalid options or an infrastructure error, and `3` for insufficient data without a known
-breach. Rate and latency checks require enough completed runs; empty or truncated cohorts cannot
-silently pass. A fresh demo database may legitimately return `3`.
-
-These are creation-time cohorts, using current run states and retained history. The latest 10,000
-matching runs are sampled, with truncation recorded explicitly. They are operational measurements,
-not an SLA guarantee. Read the [metric definitions](https://sanjays2402.github.io/retrace/docs/api/#measure-workflow-health)
-and [threshold guide](https://sanjays2402.github.io/retrace/docs/api/#check-operational-thresholds).
-
-## Monitor queues with Prometheus
-
-Scrape `http://127.0.0.1:7760/metrics` while the local inspector is running, or export a snapshot:
-
-```bash
-retrace --db jobs.db metrics > queue.prom
-```
-
-Graph queue states, configured capacity, and oldest eligible waits per definition. These read-only
-gauges omit application payloads and run IDs. See the [scrape configuration and alert examples](https://sanjays2402.github.io/retrace/docs/api/#prometheus-monitoring).
+Submission keys deduplicate identical requests, even after completion. `--delay 60` schedules
+durable delayed dispatch; `worker --once` drains available work and exits. Workers load multiple
+definitions with fair round-robin scheduling, and SIGTERM drains active work for a configurable
+grace period before pausing unfinished runs for handoff. The inspector's **Queue overview**
+shows backlog, capacity limits, signal waits, and expired leases ready for recovery. See
+[worker and queue semantics](https://sanjays2402.github.io/retrace/docs/api/).
 
 ## Investigate a run
 
@@ -177,69 +164,89 @@ filter for work needing attention, or save a permalink to a selected run and ste
 ```bash
 retrace --db jobs.db runs --status failed --status waiting
 retrace --db jobs.db runs --workflow analytics --limit 25
-retrace --db jobs.db runs --before <LAST_RUN_ID>
 retrace --db jobs.db report <RUN_ID> > run.report.json
 retrace --db jobs.db trace <RUN_ID> > run.trace.json
 retrace --db jobs.db events <RUN_ID> > events.jsonl
 ```
 
-**Download report** captures checkpoint metadata, complete attempt history, signal names, and
-recent events in one coherent snapshot. Inputs, outputs, signal/event payloads, and exception
-messages are omitted by default. Names and identifiers remain visible; review them before sharing.
-Payloads require an explicit `report --include-payloads` opt-in in the CLI.
+**Download report** captures checkpoint metadata, attempt history, signal names, and recent
+events in one snapshot. Inputs, outputs, payloads, and exception messages are omitted by
+default; names and identifiers stay visible, so review before sharing. Payloads need an explicit
+`report --include-payloads` opt-in. **Download trace** exports attempts for
+[Perfetto](https://ui.perfetto.dev), one lane per task. See
+[diagnostic reports](https://sanjays2402.github.io/retrace/docs/api/).
 
-**Download trace** exports recorded attempts for [Perfetto](https://ui.perfetto.dev), with one lane
-per task. The journal supports combined filters, payload search, and filtered JSONL downloads.
-See [diagnostic reports](https://sanjays2402.github.io/retrace/docs/api/#export-a-diagnostic-report).
+## Measure reliability and check thresholds
+
+The **Workflow health** panel compares definitions over 24 hours, 7 days, or 30 days: failed
+runs as a fraction of finished runs, p50/p95 completion latency, interrupted attempts, runs
+that recovered after failure, and expired leases.
+
+```bash
+retrace --db jobs.db health --hours 168 > weekly-health.json
+retrace --db jobs.db health --hours 168 \
+  --max-failure-rate 0.05 --max-p95-seconds 60 \
+  --max-expired-leases 0 --min-completed 20 > health-check.json
+```
+
+Checks exit `0` for pass, `1` for a known breach, `2` for invalid options or infrastructure
+errors, `3` for insufficient data. Empty or truncated cohorts cannot silently pass; a fresh
+demo database legitimately returns `3`. These are operational measurements, not an SLA
+guarantee. Read the [metric definitions](https://sanjays2402.github.io/retrace/docs/api/) and
+the threshold guide.
+
+For live dashboards, scrape `http://127.0.0.1:7760/metrics` while the inspector runs, or
+snapshot with `retrace --db jobs.db metrics > queue.prom`. The gauges are read-only and omit
+application payloads and run IDs.
 
 ## Recovery and maintenance
 
-| Operation | Command or API | Behavior |
+| Operation | Command | Behavior |
 | --- | --- | --- |
 | Wait for a decision | `Task(..., wait_for="decision")` and `retrace signal RUN_ID decision --payload '{"approved":true}'` | Durable one-shot signal; waiting releases the worker lease |
 | Preview a failed-branch retry | `retrace retry pipeline:workflow RUN_ID --task summarize --dry-run` | Shows affected steps without resetting checkpoints |
 | Retry a failed branch | `retrace retry pipeline:workflow RUN_ID --task summarize` | Preserves successful steps and attempt history |
-| Cancel work | `retrace cancel RUN_ID` | Durable cancellation revokes ownership; completed checkpoints remain |
+| Resume an interrupted run | `retrace resume pipeline:workflow RUN_ID` | Reuses checkpoints; never replays completed steps |
+| Cancel work | `retrace cancel RUN_ID` | Revokes ownership; completed checkpoints remain |
 | Back up live data | `retrace backup backups/snapshot.db` | Checked standalone snapshot including committed WAL data; never overwrites a destination |
 | Preview cleanup | `retrace prune --older-than 30` | Protects unfinished work and submission keys; deletion requires `--apply` |
 
-Commands in the table use `retrace.db` by default; put `--db jobs.db` **before** the subcommand
-to select another database. Create the backup directory first. `resume` continues interrupted work;
-`retry` explicitly resets failed steps after the external cause has been fixed.
-
-Read [durable signals](https://sanjays2402.github.io/retrace/docs/api/#durable-signals),
-[recovery](https://sanjays2402.github.io/retrace/docs/recovery/),
-[backup and restore](https://sanjays2402.github.io/retrace/docs/api/#back-up-and-restore-a-database),
-and [retention](https://sanjays2402.github.io/retrace/docs/api/#retain-useful-runs-and-clean-up-old-history)
-for the detailed contracts.
+Commands use `retrace.db` by default; put `--db jobs.db` **before** the subcommand to select
+another database. Create the backup directory first. `resume` continues interrupted work;
+`retry` explicitly resets failed steps after the external cause is fixed. Read
+[durable signals](https://sanjays2402.github.io/retrace/docs/api/),
+[recovery](https://sanjays2402.github.io/retrace/docs/recovery/), and
+[backup and retention](https://sanjays2402.github.io/retrace/docs/api/).
 
 ## Guarantees and boundaries
 
-- **Task execution is at least once.** A crash can happen after an external request succeeds
-  and before its checkpoint commits. Use `ctx.idempotency_key` with downstream systems that
-  support deduplication. Fencing protects Retrace's database, not external side effects.
+- **Execution is at least once.** A crash can land after an external request succeeds but
+  before its checkpoint commits. Use `ctx.idempotency_key` with downstream systems that
+  support deduplication; fencing protects the database, not external side effects.
 - **Single machine, local disk.** Multiple local processes can claim separate runs from one
-  database. Multi-host scheduling, network filesystems, and multi-tenant hosting are outside
-  the supported scope.
-- **Completed outputs are immutable checkpoints.** Successful functions are not replayed
-  during resume. Workflow fingerprints prevent changed definitions from reusing checkpoints.
-  Bump `Workflow.version` when implementation behavior changes: fingerprints do not hash function
-  source or installed dependencies.
-- **Tasks must cooperate with asyncio.** Blocking work delays heartbeats. Timeouts and
-  cancellation cannot forcibly terminate code that suppresses cancellation.
-- **Small JSON payloads.** Inputs and outputs are limited to 1 MiB each; keep large artifacts
-  outside the database. Writable opens migrate supported older database schemas; back up first.
-- **Local inspection.** The inspector binds to loopback and rejects foreign Host/Origin headers.
-  It has no mutation routes and displays stored application data. Avoid persisting secrets.
+  database. Multi-host scheduling, network filesystems, and multi-tenant hosting are out of
+  scope.
+- **Completed outputs are immutable checkpoints.** Successful functions are not replayed on
+  resume. Fingerprints block changed definitions from reusing old checkpoints, but they do
+  not hash function source or installed dependencies, so bump `Workflow.version` when
+  behavior changes.
+- **Tasks must cooperate with asyncio.** Blocking work delays heartbeats; timeouts and
+  cancellation cannot stop code that suppresses cancellation.
+- **Small JSON payloads.** Inputs and outputs are capped at 1 MiB each; keep large artifacts
+  outside the database. Writable opens migrate supported older schemas; back up first.
+- **Local inspection only.** The inspector binds to loopback and rejects foreign Host/Origin
+  headers. It has no mutation routes but displays stored application data, so avoid
+  persisting secrets.
 
 See [architecture and failure semantics](https://sanjays2402.github.io/retrace/docs/architecture/)
 and [security guidance](https://sanjays2402.github.io/retrace/docs/security/).
 
 ## Explore the browser demo
 
-The [public recovery playground](https://sanjays2402.github.io/retrace/) needs no account or install.
-It demonstrates checkpoint reuse, worker crashes, signal gates, journal search, and theme switching.
-It uses **synthetic browser data**; the Python engine and local inspector persist actual runs to SQLite.
+The [public recovery playground](https://sanjays2402.github.io/retrace/) needs no account or
+install. It demonstrates checkpoint reuse, worker crashes, signal gates, journal search, and
+theme switching on **synthetic browser data**; the Python engine and local inspector persist
+actual runs to SQLite.
 
 | Worker interrupted · green | Run recovered · blue |
 | :---: | :---: |
@@ -254,6 +261,7 @@ It uses **synthetic browser data**; the Python engine and local inspector persis
 | :---: | :---: |
 | [![Green dark theme](docs/assets/theme-green.png)](docs/assets/theme-green.png) | [![Red light theme](docs/assets/theme-red.png)](docs/assets/theme-red.png) |
 | Yellow · light | Blue · dark |
+| :---: | :---: |
 | [![Yellow light theme](docs/assets/theme-yellow.png)](docs/assets/theme-yellow.png) | [![Blue dark theme](docs/assets/theme-blue.png)](docs/assets/theme-blue.png) |
 
 </details>
@@ -266,7 +274,7 @@ It uses **synthetic browser data**; the Python engine and local inspector persis
 python -m pip install -e '.[dev]'
 ruff check .
 ruff format --check .
-python -m coverage run -m unittest discover -s tests -v
+python -m coverage run -m unittest discover -s tests
 python -m coverage report --fail-under=95
 python -m build
 python scripts/smoke_wheel.py
@@ -281,21 +289,19 @@ npm run check:ui
 npm run test:ui
 ```
 
-The current suite has **147 Python tests and 25 browser tests**, with **96% Python coverage**.
-CI enforces a 95% coverage floor and tests Python 3.11–3.14 on Linux, plus Python 3.12 on macOS
-and Windows. Tests cover process crashes, producer/worker contention, generated DAGs, stale-worker
-fencing, rollback, persistent retry deadlines, retention, exports, health checks, and browser
-interactions. Packaging CI installs the wheel in a clean environment outside the source tree.
-
-The [reproducible benchmark](https://sanjays2402.github.io/retrace/docs/benchmark/)
-records scheduler and checkpoint overhead, including the limits of its measurements.
+CI enforces a 95% coverage floor and tests Python 3.11–3.14 on Linux, plus Python 3.12 on
+macOS and Windows. Tests cover process crashes, producer/worker contention, generated DAGs,
+stale-worker fencing, rollback, persistent retry deadlines, retention, exports, health checks,
+and browser interactions. Packaging CI installs the wheel in a clean environment outside the
+source tree. The
+[reproducible benchmark](https://sanjays2402.github.io/retrace/docs/benchmark/) records
+scheduler and checkpoint overhead, including its measurement limits.
 
 ## Contribute
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[roadmap](https://sanjays2402.github.io/retrace/docs/roadmap/). Contributions that improve verified
-recovery semantics, operational visibility, or a concrete workflow limitation are welcome.
-Include a minimal workflow and a diagnostic report with sensitive identifiers reviewed when
-reporting a bug. Full payload reports should not be shared without reviewing their contents.
+Read [CONTRIBUTING.md](CONTRIBUTING.md). Contributions that improve verified recovery
+semantics, operational visibility, or a concrete workflow limitation are welcome. Include a
+minimal workflow and a diagnostic report with sensitive identifiers reviewed when reporting
+a bug. Full payload reports should not be shared without reviewing their contents.
 
-MIT licensed. Built by [Sanjay Santhanam](https://github.com/Sanjays2402).
+MIT licensed.
